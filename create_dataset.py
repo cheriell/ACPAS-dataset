@@ -10,8 +10,8 @@ def get_distinct_pieces_dict():
     distinct_pieces = pd.read_csv('metadata/distinct_pieces.csv')
     distinct_pieces_dict = {
         'id2piece': {},
-        'ASAP_title2id': {},
-        'CPM_title2id': {},
+        'composer_ASAP_title2id': {},
+        'composer_CPM_title2id': {},
     }
 
     for i, row in distinct_pieces.iterrows():
@@ -21,10 +21,18 @@ def get_distinct_pieces_dict():
             'CPM_title': row['CPM_title'],
             'split': math.nan,  # no split for now.
         }
-        distinct_pieces_dict['ASAP_title2id'][row['ASAP_title']] = row['id']
-        distinct_pieces_dict['CPM_title2id'][row['CPM_title']] = row['id']
+        if type(row['ASAP_title']) == str:
+            distinct_pieces_dict['composer_ASAP_title2id']['_'.join([row['composer'], row['ASAP_title']])] = row['id']
+        if type(row['CPM_title']) == str:
+            distinct_pieces_dict['composer_CPM_title2id']['_'.join([row['composer'], row['CPM_title']])] = row['id']
 
     return distinct_pieces_dict
+
+def update_distinct_pieces(distinct_pieces_dict):
+    distinct_pieces = pd.read_csv('metadata/distinct_pieces.csv')
+    for i, row in distinct_pieces.iterrows():
+        distinct_pieces.loc[i, 'split'] = distinct_pieces_dict['id2piece'][row['id']]['split']
+    distinct_pieces.to_csv('metadata/distinct_pieces.csv', index=False)
 
 def get_CPM_metadata_dict(args):
     CPM_metadata = pd.read_csv(os.path.join(args.CPM, 'metadata.csv'))
@@ -48,8 +56,8 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
 
     metadata_R = pd.DataFrame(columns=[
         'performance_id',  # "R_{number}"
-        'piece_id',  # "{number}"
         'composer',  # composer (or "Christmas")
+        'piece_id',  # "{number}"
         'title',  # title of the piece
         'source',  # "MAPS" or "ASAP"
         'performance_audio',  # path to the performance audio
@@ -69,8 +77,8 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             CPM_title = CPM_metadata_dict['short_name2title'][short_name]
 
             performance_id = 'R_' + str(performance_count + 1)
-            piece_id = distinct_pieces_dict['CPM_title2id'][CPM_title]
             composer = CPM_metadata_dict['title2piece'][CPM_title]['composer']
+            piece_id = distinct_pieces_dict['composer_CPM_title2id']['_'.join([composer, CPM_title])]
             title = 'CPM_' + CPM_title
             source = 'MAPS'
             performance_audio = os.path.join('{MAPS}', MAPS_subset, 'MUS', item[:-4]+'.wav')
@@ -84,8 +92,8 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             # update metadata_R
             metadata_R.loc[performance_count] = [
                 performance_id,
-                piece_id,
                 composer,
+                piece_id,
                 title,
                 source,
                 performance_audio,
@@ -104,8 +112,8 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             ASAP_title = row['title']
 
             performance_id = 'R_' + str(performance_count + 1)
-            piece_id = distinct_pieces_dict['ASAP_title2id'][ASAP_title]
             composer = row['composer']
+            piece_id = distinct_pieces_dict['composer_ASAP_title2id']['_'.join([composer, ASAP_title])]
             title = 'ASAP_' + ASAP_title
             source = 'ASAP'
             performance_audio = os.path.join('{ASAP}', row['audio_performance'])
@@ -116,8 +124,8 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             # update metadata_R
             metadata_R.loc[performance_count] = [
                 performance_id,
-                piece_id,
                 composer,
+                piece_id,
                 title,
                 source,
                 performance_audio,
@@ -196,8 +204,8 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
 
     metadata_S = pd.DataFrame(columns=[
         'performance_id',  # "S_{number}"
-        'piece_id',  # "{number}"
         'composer',  # composer (or "Christmas")
+        'piece_id',  # "{number}"
         'title',  # title of the piece
         'source',  # "MAPS", "ASAP" or "CPM"
         'performance_audio',  # path to the performance audio
@@ -217,8 +225,8 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             CPM_title = CPM_metadata_dict['short_name2title'][short_name]
 
             performance_id = 'S_' + str(performance_count + 1)
-            piece_id = distinct_pieces_dict['CPM_title2id'][CPM_title]
             composer = CPM_metadata_dict['title2piece'][CPM_title]['composer']
+            piece_id = distinct_pieces_dict['composer_CPM_title2id']['_'.join([composer, CPM_title])]
             title = 'CPM_' + CPM_title
             source = 'MAPS'
             performance_audio = os.path.join('{MAPS}', MAPS_subset, 'MUS', item[:-4]+'.wav')
@@ -229,8 +237,8 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             # update metadata_S
             metadata_S.loc[performance_count] = [
                 performance_id,
-                piece_id,
                 composer,
+                piece_id,
                 title,
                 source,
                 performance_audio,
@@ -247,8 +255,8 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         ASAP_title = row['title']
 
         performance_id = 'S_' + str(performance_count + 1)
-        piece_id = distinct_pieces_dict['ASAP_title2id'][ASAP_title]
         composer = row['composer']
+        piece_id = distinct_pieces_dict['composer_ASAP_title2id']['_'.join([composer, ASAP_title])]
         title = 'ASAP_' + ASAP_title
         source = 'ASAP'
         performance_audio = os.path.join('subset_S', composer, f'{piece_id}_{title}', f'{performance_id}_performance.wav')
@@ -259,8 +267,8 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         # update metadata_S
         metadata_S.loc[performance_count] = [
             performance_id,
-            piece_id,
             composer,
+            piece_id,
             title,
             source,
             performance_audio,
@@ -274,8 +282,8 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     for CPM_title, CPM_piece in CPM_metadata_dict['title2piece'].items():
         # get metadata
         performance_id = 'S_' + str(performance_count + 1)
-        piece_id = distinct_pieces_dict['CPM_title2id'][CPM_title]
         composer = CPM_piece['composer']
+        piece_id = distinct_pieces_dict['composer_CPM_title2id']['_'.join([composer, CPM_title])]
         title = 'CPM_' + CPM_title
         source = 'CPM'
         performance_audio = os.path.join('subset_S', composer, f'{piece_id}_{title}', f'{performance_id}_performance.wav')
@@ -286,8 +294,8 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         # update metadata_S
         metadata_S.loc[performance_count] = [
             performance_id,
-            piece_id,
             composer,
+            piece_id,
             title,
             source,
             performance_audio,
@@ -374,3 +382,5 @@ if __name__ == '__main__':
 
     metadata_R.to_csv('metadata/metadata_R.csv', index=False)
     metadata_S.to_csv('metadata/metadata_S.csv', index=False)
+    
+    update_distinct_pieces(distinct_pieces_dict)
