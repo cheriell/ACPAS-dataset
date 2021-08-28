@@ -1,7 +1,7 @@
 import os
 import argparse
+import math
 import pandas as pd
-from collections import defaultdict
 import random
 random.seed(42)
 
@@ -19,7 +19,7 @@ def get_distinct_pieces_dict():
             'composer': row['composer'],
             'ASAP_title': row['ASAP_title'],
             'CPM_title': row['CPM_title'],
-            'split': row['split'],
+            'split': math.nan,  # no split for now.
         }
         distinct_pieces_dict['ASAP_title2id'][row['ASAP_title']] = row['id']
         distinct_pieces_dict['CPM_title2id'][row['CPM_title']] = row['id']
@@ -30,13 +30,16 @@ def get_CPM_metadata_dict(args):
     CPM_metadata = pd.read_csv(os.path.join(args.CPM, 'metadata.csv'))
     CPM_metadata_dict = {
         'short_name2title': {},
-        'title2composer': {},
+        'title2piece': {},
     }
 
     for i, row in CPM_metadata.iterrows():
         short_name = row['midi'].split('/')[-1][:-4]
         CPM_metadata_dict['short_name2title'][short_name] = row['title']
-        CPM_metadata_dict['title2composer'][row['title']] = row['composer']
+        CPM_metadata_dict['title2piece'][row['title']] = {
+            'composer': row['composer'],
+            'midi': row['midi'],
+        }
 
     return CPM_metadata_dict
 
@@ -67,7 +70,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
 
             performance_id = 'R_' + str(performance_count + 1)
             piece_id = distinct_pieces_dict['CPM_title2id'][CPM_title]
-            composer = CPM_metadata_dict['title2composer'][CPM_title]
+            composer = CPM_metadata_dict['title2piece'][CPM_title]['composer']
             title = 'CPM_' + CPM_title
             source = 'MAPS'
             performance_audio = os.path.join('{MAPS}', MAPS_subset, 'MUS', item[:-4]+'.wav')
@@ -136,7 +139,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     ASAP_piece_id_testing_cur = set([piece_id for piece_id in ASAP_piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'testing'])
     ASAP_piece_id_remaining = ASAP_piece_id_all - ASAP_piece_id_testing_cur
     # random select some other pieces for testing
-    ASAP_piece_id_testing_additional = set(random.sample(list(ASAP_piece_id_remaining), testing_amount - len(ASAP_piece_id_testing_cur)))
+    ASAP_piece_id_testing_additional = set(random.sample(ASAP_piece_id_remaining, testing_amount - len(ASAP_piece_id_testing_cur)))
     ASAP_piece_id_remaining -= ASAP_piece_id_testing_additional
     # random select pieces for validation
     ASAP_piece_id_validation = set(random.sample(ASAP_piece_id_remaining, validation_amount))
@@ -153,6 +156,14 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
                 metadata_R.loc[i, 'split'] = 'training'
             else:
                 print('check error!')
+    # update split in distinct_pieces_dict
+    for piece_id in distinct_pieces_dict['id2piece'].keys():
+        if piece_id in ASAP_piece_id_testing_additional:
+            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'testing'
+        elif piece_id in ASAP_piece_id_validation:
+            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'validation'
+        elif piece_id in ASAP_piece_id_remaining:
+            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'training'
 
     ## subset statistics
     # MAPS
@@ -176,12 +187,167 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     print('\ttraining:', performance_training_amount)
     print('\tvalidation:', performance_validation_amount)
     print('\ttesting:', performance_testing_amount)
+    print('\ttotal:', (metadata_R['source'] == 'ASAP').sum())
 
-    metadata_R.to_csv('metadata/metadata_R.csv', index=False)
+    return distinct_pieces_dict, metadata_R
             
+def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
+    print('Create Synthetic subset...')
 
+    metadata_S = pd.DataFrame(columns=[
+        'performance_id',  # "S_{number}"
+        'piece_id',  # "{number}"
+        'composer',  # composer (or "Christmas")
+        'title',  # title of the piece
+        'source',  # "MAPS", "ASAP" or "CPM"
+        'performance_audio',  # path to the performance audio
+        'performance_MIDI',  # path to the performance MIDI
+        'MIDI_score',  # path to the MIDI score
+        'split',  # training/validation/testing
+    ])
+    performance_count = 0
 
+    ## MAPS Synthetic subsets
+    for item in os.listdir(args.A_MAPS):
+        MAPS_subset = item[9:-4].split('_')[-1]
+        if MAPS_subset not in ['ENSTDkCl', 'ENSTDkAm']:
 
+            # get metadata
+            short_name = '_'.join(item[9:-4].split('_')[:-1])
+            CPM_title = CPM_metadata_dict['short_name2title'][short_name]
+
+            performance_id = 'S_' + str(performance_count + 1)
+            piece_id = distinct_pieces_dict['CPM_title2id'][CPM_title]
+            composer = CPM_metadata_dict['title2piece'][CPM_title]['composer']
+            title = 'CPM_' + CPM_title
+            source = 'MAPS'
+            performance_audio = os.path.join('{MAPS}', MAPS_subset, 'MUS', item[:-4]+'.wav')
+            performance_MIDI = os.path.join('{MAPS}', MAPS_subset, 'MUS', item)
+            MIDI_score = os.path.join('{A_MAPS}', item)
+            split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
+
+            # update metadata_S
+            metadata_S.loc[performance_count] = [
+                performance_id,
+                piece_id,
+                composer,
+                title,
+                source,
+                performance_audio,
+                performance_MIDI,
+                MIDI_score,
+                split,
+            ]
+            performance_count += 1
+
+    ## ASAP performance MIDIs
+    metadata_ASAP = pd.read_csv(os.path.join(args.ASAP, 'metadata.csv'))
+    for i, row in metadata_ASAP.iterrows():
+        # get metadata
+        ASAP_title = row['title']
+
+        performance_id = 'S_' + str(performance_count + 1)
+        piece_id = distinct_pieces_dict['ASAP_title2id'][ASAP_title]
+        composer = row['composer']
+        title = 'ASAP_' + ASAP_title
+        source = 'ASAP'
+        performance_audio = os.path.join('subset_S', composer, f'{piece_id}_{title}', f'{performance_id}_performance.wav')
+        performance_MIDI = os.path.join('{ASAP}', row['midi_performance'])
+        MIDI_score = os.path.join('{ASAP}', row['midi_score'])
+        split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
+
+        # update metadata_S
+        metadata_S.loc[performance_count] = [
+            performance_id,
+            piece_id,
+            composer,
+            title,
+            source,
+            performance_audio,
+            performance_MIDI,
+            MIDI_score,
+            split,
+        ]
+        performance_count += 1
+
+    ## CPM performances
+    for CPM_title, CPM_piece in CPM_metadata_dict['title2piece'].items():
+        # get metadata
+        performance_id = 'S_' + str(performance_count + 1)
+        piece_id = distinct_pieces_dict['CPM_title2id'][CPM_title]
+        composer = CPM_piece['composer']
+        title = 'CPM_' + CPM_title
+        source = 'CPM'
+        performance_audio = os.path.join('subset_S', composer, f'{piece_id}_{title}', f'{performance_id}_performance.wav')
+        performance_MIDI = os.path.join('{CPM}', CPM_piece['midi'])
+        MIDI_score = os.path.join('{CPM}', CPM_piece['midi'])
+        split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
+
+        # update metadata_S
+        metadata_S.loc[performance_count] = [
+            performance_id,
+            piece_id,
+            composer,
+            title,
+            source,
+            performance_audio,
+            performance_MIDI,
+            MIDI_score,
+            split,
+        ]
+        performance_count += 1
+
+    ## split into training/validation and testing
+    piece_id_all = set(metadata_S.loc[:, 'piece_id'])
+    # training/validation/testing amounts
+    training_amount = len(piece_id_all) * 8 // 10
+    validation_amount = len(piece_id_all) // 10
+    testing_amount = len(piece_id_all) - training_amount - validation_amount
+
+    # pieces already splitted
+    piece_id_training_cur = set([piece_id for piece_id in piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'training'])
+    piece_id_validation_cur = set([piece_id for piece_id in piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'validation'])
+    piece_id_testing_cur = set([piece_id for piece_id in piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'testing'])
+    piece_id_remaining = piece_id_all - piece_id_training_cur - piece_id_validation_cur - piece_id_testing_cur
+    # random select some other for testing
+    if len(piece_id_testing_cur) < testing_amount:
+        piece_id_testing_additional = set(random.sample(piece_id_remaining, testing_amount - len(piece_id_testing_cur)))
+        piece_id_remaining -= piece_id_testing_additional
+    else:
+        piece_id_testing_additional = {}
+    if len(piece_id_validation_cur) < validation_amount:
+        piece_id_validation_additional = set(random.sample(piece_id_remaining, validation_amount - len(piece_id_validation_cur)))
+        piece_id_remaining -= piece_id_validation_additional
+    else:
+        piece_id_validation_additional = {}
+        
+    # update split in metadata_S
+    for i, row in metadata_S.iterrows():
+        if type(row['split']) == float:
+            if row['piece_id'] in piece_id_testing_additional:
+                metadata_S.loc[i, 'split'] = 'testing'
+            elif row['piece_id'] in piece_id_validation_additional:
+                metadata_S.loc[i, 'split'] = 'validation'
+            elif row['piece_id'] in piece_id_remaining:
+                metadata_S.loc[i, 'split'] = 'training'
+            else:
+                print('check error!')
+    # update split in distinct_pieces_dict
+    for piece_id in distinct_pieces_dict['id2piece'].keys():
+        if piece_id in piece_id_testing_additional:
+            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'testing'
+        elif piece_id in piece_id_validation_additional:
+            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'validation'
+        elif piece_id in piece_id_remaining:
+            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'training'
+
+    ## subset statistics:
+    print('\ttraining:', (metadata_S['split'] == 'training').sum())
+    print('\tvalidation:', (metadata_S['split'] == 'validation').sum())
+    print('\ttesting:', (metadata_S['split'] == 'testing').sum())
+    print('\ttotal:', len(metadata_S))
+    
+    return distinct_pieces_dict, metadata_S
 
 if __name__ == '__main__':
 
@@ -203,4 +369,8 @@ if __name__ == '__main__':
     distinct_pieces_dict = get_distinct_pieces_dict()
     CPM_metadata_dict = get_CPM_metadata_dict(args)
 
-    create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args)
+    distinct_pieces_dict, metadata_R =  create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args)
+    distinct_pieces_dict, metadata_S = create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args)
+
+    metadata_R.to_csv('metadata/metadata_R.csv', index=False)
+    metadata_S.to_csv('metadata/metadata_S.csv', index=False)
