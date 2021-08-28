@@ -1,6 +1,9 @@
 import os
 import argparse
 import pandas as pd
+from collections import defaultdict
+import random
+random.seed(42)
 
 
 def get_distinct_pieces_dict():
@@ -53,7 +56,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     ])
     performance_count = 0
 
-    # MAPS "ENSTDkCl" and "ENSTDkAm" subsets
+    ## MAPS "ENSTDkCl" and "ENSTDkAm" subsets
     for item in os.listdir(args.A_MAPS):
         MAPS_subset = item[9:-4].split('_')[-1]
         if MAPS_subset in ['ENSTDkCl', 'ENSTDkAm']:
@@ -62,7 +65,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             short_name = '_'.join(item[9:-4].split('_')[:-1])
             CPM_title = CPM_metadata_dict['short_name2title'][short_name]
 
-            performance_id = performance_count + 1
+            performance_id = 'R_' + str(performance_count + 1)
             piece_id = distinct_pieces_dict['CPM_title2id'][CPM_title]
             composer = CPM_metadata_dict['title2composer'][CPM_title]
             title = 'CPM_' + CPM_title
@@ -89,8 +92,90 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             ]
             performance_count += 1
 
-    # ASAP real recording tuples
+    ## ASAP real recording tuples
+    metadata_ASAP = pd.read_csv(os.path.join(args.ASAP, 'metadata.csv'))
+    for i, row in metadata_ASAP.iterrows():
+        if type(row['audio_performance']) == str:
+            
+            # get metadata
+            ASAP_title = row['title']
 
+            performance_id = 'R_' + str(performance_count + 1)
+            piece_id = distinct_pieces_dict['ASAP_title2id'][ASAP_title]
+            composer = row['composer']
+            title = 'ASAP_' + ASAP_title
+            source = 'ASAP'
+            performance_audio = os.path.join('{ASAP}', row['audio_performance'])
+            performance_MIDI = os.path.join('{ASAP}', row['midi_performance'])
+            MIDI_score = os.path.join('{ASAP}', row['midi_score'])
+            split = distinct_pieces_dict['id2piece'][piece_id]['split']  # testing is the piece is already testing, update more testing later.
+
+            # update metadata_R
+            metadata_R.loc[performance_count] = [
+                performance_id,
+                piece_id,
+                composer,
+                title,
+                source,
+                performance_audio,
+                performance_MIDI,
+                MIDI_score,
+                split,
+            ]
+            performance_count += 1
+
+    ## udpate training/validation/testing split for ASAP real recording performances
+    # all pieces from ASAP
+    ASAP_piece_id_all = set([row['piece_id'] for i, row in metadata_R.iterrows() if row['source'] == 'ASAP'])
+    # training/validation/testing amounts
+    training_amount = len(ASAP_piece_id_all) * 8 // 10
+    validation_amount = len(ASAP_piece_id_all) // 10
+    testing_amount = len(ASAP_piece_id_all) - training_amount - validation_amount
+
+    # pieces already split to testing
+    ASAP_piece_id_testing_cur = set([piece_id for piece_id in ASAP_piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'testing'])
+    ASAP_piece_id_remaining = ASAP_piece_id_all - ASAP_piece_id_testing_cur
+    # random select some other pieces for testing
+    ASAP_piece_id_testing_additional = set(random.sample(list(ASAP_piece_id_remaining), testing_amount - len(ASAP_piece_id_testing_cur)))
+    ASAP_piece_id_remaining -= ASAP_piece_id_testing_additional
+    # random select pieces for validation
+    ASAP_piece_id_validation = set(random.sample(ASAP_piece_id_remaining, validation_amount))
+    ASAP_piece_id_remaining -= ASAP_piece_id_validation
+
+    # update split in metadata_R
+    for i, row in metadata_R.iterrows():
+        if type(row['split']) == float:
+            if row['piece_id'] in ASAP_piece_id_testing_additional:
+                metadata_R.loc[i, 'split'] = 'testing'
+            elif row['piece_id'] in ASAP_piece_id_validation:
+                metadata_R.loc[i, 'split'] = 'validation'
+            elif row['piece_id'] in ASAP_piece_id_remaining:
+                metadata_R.loc[i, 'split'] = 'training'
+            else:
+                print('check error!')
+
+    ## subset statistics
+    # MAPS
+    print('- from MAPS:')
+    print('\ttesting:', (metadata_R['source'] == 'MAPS').sum())
+    # ASAP
+    performance_training_amount = 0
+    performance_validation_amount = 0
+    performance_testing_amount = 0
+    for i, row in metadata_R.iterrows():
+        if row['source'] == 'ASAP':
+            if row['split'] == 'training':
+                performance_training_amount += 1
+            elif row['split'] == 'validation':
+                performance_validation_amount += 1
+            elif row['split'] == 'testing':
+                performance_testing_amount += 1
+            else:
+                print('check error!')
+    print('- from ASAP:')
+    print('\ttraining:', performance_training_amount)
+    print('\tvalidation:', performance_validation_amount)
+    print('\ttesting:', performance_testing_amount)
 
     metadata_R.to_csv('metadata/metadata_R.csv', index=False)
             
