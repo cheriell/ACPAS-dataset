@@ -87,7 +87,9 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     performance_count = 0
 
     ## MAPS "ENSTDkCl" and "ENSTDkAm" subsets
-    for item in os.listdir(args.A_MAPS):
+    A_MAPS_items = os.listdir(args.A_MAPS)
+    A_MAPS_items.sort()
+    for item in A_MAPS_items:
         MAPS_subset = item[9:-4].split('_')[-1]
         if MAPS_subset in ['ENSTDkCl', 'ENSTDkAm']:
 
@@ -255,7 +257,9 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     performance_count = 0
 
     ## MAPS Synthetic subsets
-    for item in os.listdir(args.A_MAPS):
+    A_MAPS_items = os.listdir(args.A_MAPS)
+    A_MAPS_items.sort()
+    for item in A_MAPS_items:
         MAPS_subset = item[9:-4].split('_')[-1]
         if MAPS_subset not in ['ENSTDkCl', 'ENSTDkAm']:
 
