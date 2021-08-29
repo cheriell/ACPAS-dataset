@@ -8,7 +8,7 @@ random.seed(42)
 import subprocess
 import time
 
-from utilities import format_path, load_path
+from utilities import format_path, load_path, mkdir
 
 Kontakt_Pianos_all = ['Gentleman_soft',
                     'Gentleman_hard', 
@@ -445,8 +445,7 @@ def copy_midi_files(metadata, subset, args):
         performance_MIDI_internal = os.path.join(folder, row['performance_MIDI'])
         MIDI_score_internal = os.path.join(folder, row['MIDI_score'])
         
-        if not os.path.exists(folder):
-            os.makedirs(folder)
+        mkdir(folder)
         if not os.path.exists(performance_MIDI_internal):
             subprocess.check_output(['cp', performance_MIDI_external, performance_MIDI_internal])
             time.sleep(0.02)
@@ -467,8 +466,7 @@ def copy_audio_files(metadata, subset, args):
             folder = os.path.join('audio_files', load_path(row['folder']))
             performance_audio_internal = os.path.join(folder, row['performance_audio'])
 
-            if not os.path.exists(folder):
-                os.makedirs(folder)
+            mkdir(folder)
             if not os.path.exists(performance_audio_internal):
                 subprocess.check_output(['cp', performance_audio_external, performance_audio_internal])
                 time.sleep(0.02)
