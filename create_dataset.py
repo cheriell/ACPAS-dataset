@@ -8,6 +8,8 @@ random.seed(42)
 import subprocess
 import time
 
+from utilities import format_path, load_path
+
 Kontakt_Pianos_all = ['Gentleman_soft',
                     'Gentleman_hard', 
                     'Giant_soft', 
@@ -17,18 +19,6 @@ Kontakt_Pianos_all = ['Gentleman_soft',
                     'Maverick_soft',
                     'Maverick_hard']
 Kontakt_Pianos_train = Kontakt_Pianos_all[:6]
-
-def format_path(path):
-    # to linux path
-    if sys.platform[:3] == 'win':
-        path = path.replace('\\', '/')
-    return path
-
-def load_path(path):
-    # to the system's path format
-    if sys.platform[:3] == 'win':
-        path = path.replace('/', '\\')
-    return path
 
 def get_distinct_pieces_dict():
     distinct_pieces = pd.read_csv('distinct_pieces.csv')
