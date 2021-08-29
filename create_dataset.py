@@ -8,6 +8,15 @@ random.seed(42)
 import subprocess
 import time
 
+Kontakt_Pianos_all = ['Gentleman_soft',
+                    'Gentleman_hard', 
+                    'Giant_soft', 
+                    'Giant_hard',
+                    'Grandeur_soft',
+                    'Grandeur_hard', 
+                    'Maverick_soft',
+                    'Maverick_hard']
+Kontakt_Pianos_train = Kontakt_Pianos_all[:6]
 
 def format_path(path):
     # to linux path
@@ -416,6 +425,15 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         elif piece_id in piece_id_remaining:
             distinct_pieces_dict['id2piece'][piece_id]['split'] = 'training'
 
+    ## Allocate Kontakt Piano according to the training/validation/testing split
+    for i, row in metadata_S.iterrows():
+        if type(row['performance_audio_external']) == float:
+            if row['split'] == 'testing':
+                piano = random.choice(Kontakt_Pianos_all)
+            else:
+                piano = random.choice(Kontakt_Pianos_train)
+            metadata_S.loc[i, 'performance_audio'] = row['performance_audio'][:-4] + '_' + piano + '.wav'
+
     ## subset statistics:
     print('\ttraining:', (metadata_S['split'] == 'training').sum())
     print('\tvalidation:', (metadata_S['split'] == 'validation').sum())
@@ -475,18 +493,18 @@ if __name__ == '__main__':
                         help='Path to the MAPS dataset')
     parser.add_argument('--A_MAPS', 
                         type=str, 
-                        # default='C:\\Users\\Marco\\Downloads\\Datasets\\A-MAPS\\midi',
-                        default='/import/c4dm-datasets/A2S_transcription/A-MAPS_1.1/midi',
+                        default='C:\\Users\\Marco\\Downloads\\Datasets\\A-MAPS\\midi',
+                        # default='/import/c4dm-datasets/A2S_transcription/A-MAPS_1.1/midi',
                         help='Path to the A_MAPS midi files')
     parser.add_argument('--CPM',
                         type=str,
-                        # default='C:\\Users\\Marco\\Downloads\\Datasets\\ClassicalPianoMIDI-dataset',
-                        default='/import/c4dm-datasets/A2S_transcription/working/ClassicalPianoMIDI-dataset',
+                        default='C:\\Users\\Marco\\Downloads\\Datasets\\ClassicalPianoMIDI-dataset',
+                        # default='/import/c4dm-datasets/A2S_transcription/working/ClassicalPianoMIDI-dataset',
                         help='Path to the Classical Piano MIDI dataset')
     parser.add_argument('--ASAP',
                         type=str,
-                        # default='C:\\Users\\Marco\\Downloads\\Datasets\\asap-dataset',
-                        default='/import/c4dm-datasets/ASAP_dataset/asap-dataset-1.1',
+                        default='C:\\Users\\Marco\\Downloads\\Datasets\\asap-dataset',
+                        # default='/import/c4dm-datasets/ASAP_dataset/asap-dataset-1.1',
                         help='Path to the ASAP dataset')
     args = parser.parse_args()
 
@@ -503,5 +521,5 @@ if __name__ == '__main__':
 
     copy_midi_files(metadata_R, 'subset_R', args)
     copy_midi_files(metadata_S, 'subset_S', args)
-    copy_audio_files(metadata_R, 'subset_R', args)
-    copy_audio_files(metadata_S, 'subset_S', args)
+    # copy_audio_files(metadata_R, 'subset_R', args)
+    # copy_audio_files(metadata_S, 'subset_S', args)
