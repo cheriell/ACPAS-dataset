@@ -1,13 +1,28 @@
 import os
+import sys
 import argparse
 import math
 import pandas as pd
 import random
 random.seed(42)
+import subprocess
+import time
 
+
+def format_path(path):
+    # to linux path
+    if sys.platform[:3] == 'win':
+        path = path.replace('\\', '/')
+    return path
+
+def load_path(path):
+    # to the system's path format
+    if sys.platform[:3] == 'win':
+        path = path.replace('/', '\\')
+    return path
 
 def get_distinct_pieces_dict():
-    distinct_pieces = pd.read_csv('metadata/distinct_pieces.csv')
+    distinct_pieces = pd.read_csv('distinct_pieces.csv')
     distinct_pieces_dict = {
         'id2piece': {},
         'composer_ASAP_title2id': {},
@@ -29,10 +44,10 @@ def get_distinct_pieces_dict():
     return distinct_pieces_dict
 
 def update_distinct_pieces(distinct_pieces_dict):
-    distinct_pieces = pd.read_csv('metadata/distinct_pieces.csv')
+    distinct_pieces = pd.read_csv('distinct_pieces.csv')
     for i, row in distinct_pieces.iterrows():
         distinct_pieces.loc[i, 'split'] = distinct_pieces_dict['id2piece'][row['id']]['split']
-    distinct_pieces.to_csv('metadata/distinct_pieces.csv', index=False)
+    distinct_pieces.to_csv('distinct_pieces.csv', index=False)
 
 def get_CPM_metadata_dict(args):
     CPM_metadata = pd.read_csv(os.path.join(args.CPM, 'metadata.csv'))
@@ -60,6 +75,10 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         'piece_id',  # "{number}"
         'title',  # title of the piece
         'source',  # "MAPS" or "ASAP"
+        'performance_audio_external',  # path to the external performance audio
+        'performance_MIDI_external',  # path to the external performance MIDI
+        'MIDI_score_external',  # path to the external MIDI score
+        'folder',  # folder to the audio and MIDI files
         'performance_audio',  # path to the performance audio
         'performance_MIDI',  # path to the performance MIDI
         'MIDI_score',  # path to the MIDI score
@@ -81,9 +100,13 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             piece_id = distinct_pieces_dict['composer_CPM_title2id']['_'.join([composer, CPM_title])]
             title = 'CPM_' + CPM_title
             source = 'MAPS'
-            performance_audio = os.path.join('{MAPS}', MAPS_subset, 'MUS', item[:-4]+'.wav')
-            performance_MIDI = os.path.join('{MAPS}', MAPS_subset, 'MUS', item)
-            MIDI_score = os.path.join('{A_MAPS}', item)
+            performance_audio_external = format_path(os.path.join('{MAPS}', MAPS_subset, 'MUS', item[:-4]+'.wav'))
+            performance_MIDI_external = format_path(os.path.join('{A_MAPS}', item))
+            MIDI_score_external = format_path(os.path.join('{A_MAPS}', item))  # same as performance MIDI
+            folder = format_path(os.path.join('subset_R', composer, f'{piece_id}_{title}'.replace("'", '_')))
+            performance_audio = f'{performance_id}_MAPS.wav'
+            performance_MIDI = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'
+            MIDI_score = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'  # same as performance MIDI
             split = 'testing'
 
             # update split in distinct_pieces_dict
@@ -96,6 +119,10 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
                 piece_id,
                 title,
                 source,
+                performance_audio_external,
+                performance_MIDI_external,
+                MIDI_score_external,
+                folder,
                 performance_audio,
                 performance_MIDI,
                 MIDI_score,
@@ -116,9 +143,13 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             piece_id = distinct_pieces_dict['composer_ASAP_title2id']['_'.join([composer, ASAP_title])]
             title = 'ASAP_' + ASAP_title
             source = 'ASAP'
-            performance_audio = os.path.join('{ASAP}', row['audio_performance'])
-            performance_MIDI = os.path.join('{ASAP}', row['midi_performance'])
-            MIDI_score = os.path.join('{ASAP}', row['midi_score'])
+            performance_audio_external = format_path(os.path.join('{ASAP}', row['audio_performance']))
+            performance_MIDI_external = format_path(os.path.join('{ASAP}', row['midi_performance']))
+            MIDI_score_external = format_path(os.path.join('{ASAP}', row['midi_score']))
+            folder = format_path(os.path.join('subset_R', composer, f'{piece_id}_{title}'.replace("'", '_')))
+            performance_audio = f'{performance_id}_ASAP.wav'
+            performance_MIDI = f'{performance_id}_ASAP.mid'
+            MIDI_score = f'ASAP_{row["folder"].split("/")[-1]}.mid'
             split = distinct_pieces_dict['id2piece'][piece_id]['split']  # testing is the piece is already testing, update more testing later.
 
             # update metadata_R
@@ -128,6 +159,10 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
                 piece_id,
                 title,
                 source,
+                performance_audio_external,
+                performance_MIDI_external,
+                MIDI_score_external,
+                folder,
                 performance_audio,
                 performance_MIDI,
                 MIDI_score,
@@ -208,6 +243,10 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         'piece_id',  # "{number}"
         'title',  # title of the piece
         'source',  # "MAPS", "ASAP" or "CPM"
+        'performance_audio_external',  # path to the performance audio
+        'performance_MIDI_external',  # path to the performance MIDI
+        'MIDI_score_external',  # path to the MIDI score
+        'folder',  # folder to the audio and MIDI files
         'performance_audio',  # path to the performance audio
         'performance_MIDI',  # path to the performance MIDI
         'MIDI_score',  # path to the MIDI score
@@ -229,9 +268,13 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             piece_id = distinct_pieces_dict['composer_CPM_title2id']['_'.join([composer, CPM_title])]
             title = 'CPM_' + CPM_title
             source = 'MAPS'
-            performance_audio = os.path.join('{MAPS}', MAPS_subset, 'MUS', item[:-4]+'.wav')
-            performance_MIDI = os.path.join('{MAPS}', MAPS_subset, 'MUS', item)
-            MIDI_score = os.path.join('{A_MAPS}', item)
+            performance_audio_external = format_path(os.path.join('{MAPS}', MAPS_subset, 'MUS', item[:-4]+'.wav'))
+            performance_MIDI_external = format_path(os.path.join('{A_MAPS}', item))
+            MIDI_score_external = format_path(os.path.join('{A_MAPS}', item))  # same as performance MIDI
+            folder = format_path(os.path.join('subset_S', composer, f'{piece_id}_{title}'.replace("'", '_')))
+            performance_audio = f'{performance_id}_MAPS.wav'
+            performance_MIDI = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'
+            MIDI_score = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'  # same as performance MIDI
             split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
 
             # update metadata_S
@@ -241,6 +284,10 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
                 piece_id,
                 title,
                 source,
+                performance_audio_external,
+                performance_MIDI_external,
+                MIDI_score_external,
+                folder,
                 performance_audio,
                 performance_MIDI,
                 MIDI_score,
@@ -259,9 +306,13 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         piece_id = distinct_pieces_dict['composer_ASAP_title2id']['_'.join([composer, ASAP_title])]
         title = 'ASAP_' + ASAP_title
         source = 'ASAP'
-        performance_audio = os.path.join('subset_S', composer, f'{piece_id}_{title}', f'{performance_id}_performance.wav')
-        performance_MIDI = os.path.join('{ASAP}', row['midi_performance'])
-        MIDI_score = os.path.join('{ASAP}', row['midi_score'])
+        performance_audio_external = ''
+        performance_MIDI_external = format_path(os.path.join('{ASAP}', row['midi_performance']))
+        MIDI_score_external = format_path(os.path.join('{ASAP}', row['midi_score']))
+        folder = format_path(os.path.join('subset_S', composer, f'{piece_id}_{title}'.replace("'", '_')))
+        performance_audio = f'{performance_id}_Kontakt.wav'
+        performance_MIDI = f'{performance_id}_ASAP.mid'
+        MIDI_score = f'ASAP_{row["folder"].split("/")[-1]}.mid'
         split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
 
         # update metadata_S
@@ -271,6 +322,10 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             piece_id,
             title,
             source,
+            performance_audio_external,
+            performance_MIDI_external,
+            MIDI_score_external,
+            folder,
             performance_audio,
             performance_MIDI,
             MIDI_score,
@@ -286,9 +341,13 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         piece_id = distinct_pieces_dict['composer_CPM_title2id']['_'.join([composer, CPM_title])]
         title = 'CPM_' + CPM_title
         source = 'CPM'
-        performance_audio = os.path.join('subset_S', composer, f'{piece_id}_{title}', f'{performance_id}_performance.wav')
-        performance_MIDI = os.path.join('{CPM}', CPM_piece['midi'])
-        MIDI_score = os.path.join('{CPM}', CPM_piece['midi'])
+        performance_audio_external = ''
+        performance_MIDI_external = format_path(os.path.join('{CPM}', CPM_piece['midi']))
+        MIDI_score_external = format_path(os.path.join('{CPM}', CPM_piece['midi']))
+        folder = format_path(os.path.join('subset_S', composer, f'{piece_id}_{title}'.replace("'", '_')))
+        performance_audio = f'{performance_id}_Kontakt.wav'
+        performance_MIDI = f'{performance_id}_CPM.mid'
+        MIDI_score = f'{performance_id}_CPM.mid'  # same as performance midi
         split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
 
         # update metadata_S
@@ -298,6 +357,10 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             piece_id,
             title,
             source,
+            performance_audio_external,
+            performance_MIDI_external,
+            MIDI_score_external,
+            folder,
             performance_audio,
             performance_MIDI,
             MIDI_score,
@@ -357,9 +420,35 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     
     return distinct_pieces_dict, metadata_S
 
+def copy_midi_files(metadata, subset, args):
+    print('Copy midi files from external datasets to this dataset...')
+    print(subset)
+
+    for i, row in metadata.iterrows():
+        print(i+1, '/', len(metadata), end='\r')
+        performance_MIDI_external = load_path(row['performance_MIDI_external']).format(A_MAPS=args.A_MAPS, CPM=args.CPM, ASAP=args.ASAP)
+        MIDI_score_external = load_path(row['MIDI_score_external']).format(A_MAPS=args.A_MAPS, CPM=args.CPM, ASAP=args.ASAP)
+        folder = load_path(row['folder'])
+        performance_MIDI_internal = os.path.join(folder, row['performance_MIDI'])
+        MIDI_score_internal = os.path.join(folder, row['MIDI_score'])
+        
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        if not os.path.exists(performance_MIDI_internal):
+            subprocess.check_output(['cp', performance_MIDI_external, performance_MIDI_internal])
+            time.sleep(0.02)
+        if not os.path.exists(MIDI_score_internal):
+            subprocess.check_output(['cp', MIDI_score_external, MIDI_score_internal])
+            time.sleep(0.02)
+    print()
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('--MAPS',
+                        type=str,
+                        default='',
+                        help='Path to the MAPS dataset')
     parser.add_argument('--A_MAPS', 
                         type=str, 
                         default='C:\\Users\\Marco\\Downloads\\Datasets\\A-MAPS\\midi',
@@ -380,7 +469,10 @@ if __name__ == '__main__':
     distinct_pieces_dict, metadata_R =  create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args)
     distinct_pieces_dict, metadata_S = create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args)
 
-    metadata_R.to_csv('metadata/metadata_R.csv', index=False)
-    metadata_S.to_csv('metadata/metadata_S.csv', index=False)
+    metadata_R.to_csv('metadata_R.csv', index=False)
+    metadata_S.to_csv('metadata_S.csv', index=False)
     
     update_distinct_pieces(distinct_pieces_dict)
+
+    copy_midi_files(metadata_R, 'subset_R', args)
+    copy_midi_files(metadata_S, 'subset_S', args)

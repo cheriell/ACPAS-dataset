@@ -43,14 +43,14 @@ The data is structured as follows:
     |-- subset_R
     |   |-- composer
     |   |   |-- {piece_id}_{title}
-    |   |       |-- {performance_id}_performance.wav
-    |   |       |-- {performance_id}_performance.mid
-    |   |       |-- {performance_id}_score.mid
+    |   |       |-- {performance_id}_{source_code}.wav  # performance audio
+    |   |       |-- {performance_id}_{source_code}.mid  # performance MIDI
+    |   |       |-- {source_code}.mid                   # MIDI score
     |   |-- metadata_R.csv
     |-- subset_S
         |-- composer
         |   |-- {piece_id}_{title}
-        |       |-- {performance_id}_performance.wav
-        |       |-- {performance_id}_performance.mid
-        |       |-- {performance_id}_score.mid
+        |       |-- {performance_id}_{source_code}.wav  # performance audio
+        |       |-- {performance_id}_{source_code}.mid  # performance MIDI
+        |       |-- {source_code}.mid                   # MIDI score
         |-- metadata_S.csv
