@@ -310,7 +310,7 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         piece_id = distinct_pieces_dict['composer_ASAP_title2id']['_'.join([composer, ASAP_title])]
         title = 'ASAP_' + ASAP_title
         source = 'ASAP'
-        performance_audio_external = ''
+        performance_audio_external = math.nan
         performance_MIDI_external = format_path(os.path.join('{ASAP}', row['midi_performance']))
         MIDI_score_external = format_path(os.path.join('{ASAP}', row['midi_score']))
         folder = format_path(os.path.join('subset_S', composer, f'{piece_id}_{title}'.replace("'", '_')))
@@ -345,7 +345,7 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         piece_id = distinct_pieces_dict['composer_CPM_title2id']['_'.join([composer, CPM_title])]
         title = 'CPM_' + CPM_title
         source = 'CPM'
-        performance_audio_external = ''
+        performance_audio_external = math.nan
         performance_MIDI_external = format_path(os.path.join('{CPM}', CPM_piece['midi']))
         MIDI_score_external = format_path(os.path.join('{CPM}', CPM_piece['midi']))
         folder = format_path(os.path.join('subset_S', composer, f'{piece_id}_{title}'.replace("'", '_')))
@@ -425,11 +425,12 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     return distinct_pieces_dict, metadata_S
 
 def copy_midi_files(metadata, subset, args):
-    print('Copy midi files from external datasets to this dataset...')
+    print('Copy midi files from external sources...')
     print(subset)
 
     for i, row in metadata.iterrows():
         print(i+1, '/', len(metadata), end='\r')
+
         performance_MIDI_external = load_path(row['performance_MIDI_external']).format(A_MAPS=args.A_MAPS, CPM=args.CPM, ASAP=args.ASAP)
         MIDI_score_external = load_path(row['MIDI_score_external']).format(A_MAPS=args.A_MAPS, CPM=args.CPM, ASAP=args.ASAP)
         folder = load_path(row['folder'])
@@ -446,12 +447,31 @@ def copy_midi_files(metadata, subset, args):
             time.sleep(0.02)
     print()
 
+def copy_audio_files(metadata, subset, args):
+    print('Copy audio files from external sources...')
+    print(subset)
+
+    for i, row in metadata.iterrows():
+        print(i+1, '/', len(metadata), end='\r')
+
+        if type(row['performance_audio_external']) == str:
+            performance_audio_external = load_path(row['performance_audio_external']).format(MAPS=args.MAPS, ASAP=args.ASAP)
+            folder = os.path.join('audio_files', load_path(row['folder']))
+            performance_audio_internal = os.path.join(folder, row['performance_audio'])
+
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+            if not os.path.exists(performance_audio_internal):
+                subprocess.check_output(['cp', performance_audio_external, performance_audio_internal])
+                time.sleep(0.02)
+    print()
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--MAPS',
                         type=str,
-                        default='',
+                        default='/import/c4dm-01/MAPS_original',
                         help='Path to the MAPS dataset')
     parser.add_argument('--A_MAPS', 
                         type=str, 
@@ -470,7 +490,7 @@ if __name__ == '__main__':
                         help='Path to the ASAP dataset')
     args = parser.parse_args()
 
-    distinct_pieces_dict = get_distinct_pieces_dict()
+    distinct_pieces_dict = get_distinct_pieces_dict()  # original distinct pieces are manually checked
     CPM_metadata_dict = get_CPM_metadata_dict(args)
 
     distinct_pieces_dict, metadata_R =  create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args)
@@ -483,3 +503,5 @@ if __name__ == '__main__':
 
     copy_midi_files(metadata_R, 'subset_R', args)
     copy_midi_files(metadata_S, 'subset_S', args)
+    copy_audio_files(metadata_R, 'subset_R', args)
+    copy_audio_files(metadata_S, 'subset_S', args)
