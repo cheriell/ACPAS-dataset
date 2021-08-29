@@ -455,15 +455,18 @@ if __name__ == '__main__':
                         help='Path to the MAPS dataset')
     parser.add_argument('--A_MAPS', 
                         type=str, 
-                        default='C:\\Users\\Marco\\Downloads\\Datasets\\A-MAPS\\midi',
+                        # default='C:\\Users\\Marco\\Downloads\\Datasets\\A-MAPS\\midi',
+                        default='/import/c4dm-datasets/A2S_transcription/A-MAPS_1.1/midi',
                         help='Path to the A_MAPS midi files')
     parser.add_argument('--CPM',
                         type=str,
-                        default='C:\\Users\\Marco\\Downloads\\Datasets\\ClassicalPianoMIDI-dataset',
+                        # default='C:\\Users\\Marco\\Downloads\\Datasets\\ClassicalPianoMIDI-dataset',
+                        default='/import/c4dm-datasets/A2S_transcription/working/ClassicalPianoMIDI-dataset',
                         help='Path to the Classical Piano MIDI dataset')
     parser.add_argument('--ASAP',
                         type=str,
-                        default='C:\\Users\\Marco\\Downloads\\Datasets\\asap-dataset',
+                        # default='C:\\Users\\Marco\\Downloads\\Datasets\\asap-dataset',
+                        default='/import/c4dm-datasets/ASAP_dataset/asap-dataset-1.1',
                         help='Path to the ASAP dataset')
     args = parser.parse_args()
 
