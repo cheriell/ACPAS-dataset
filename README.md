@@ -25,14 +25,14 @@ Among all the performances in the two subsets, we make sure there is no overlap 
 The data is structured as follows:
 
     |-- subset_{subset}
-        |-- {composer}
-        |   |-- {piece_id}_{title}
-        |       |-- {performance_id}_{source_code}.wav  # performance audio
-        |       |-- {performance_id}_{source_code}.mid  # performance MIDI
-        |       |-- {source_description}.mid            # MIDI score
-        |       |-- {performance_beat_annotation}.csv   # performance beat annotation
-        |       |-- {score_beat_annotation}.csv         # score beat annotation
-        |-- metadata_{subset}.csv
+    |   |-- {composer}
+    |       |-- {piece_id}_{title}
+    |           |-- {performance_id}_{source_code}.wav  # performance audio
+    |           |-- {performance_id}_{source_code}.mid  # performance MIDI
+    |           |-- {source_description}.mid            # MIDI score
+    |           |-- {performance_beat_annotation}.csv   # performance beat annotation
+    |           |-- {score_beat_annotation}.csv         # score beat annotation
+    |-- metadata_{subset}.csv
 
 ### Real recording subset
 
