@@ -7,18 +7,42 @@ import random
 random.seed(42)
 import subprocess
 import time
+import pretty_midi as pm
+from collections import defaultdict
 
 from utilities import format_path, load_path, mkdir
 
-Kontakt_Pianos_all = ['Gentleman_soft',
-                    'Gentleman_hard', 
-                    'Giant_soft',
-                    'Giant_hard',
-                    'Grandeur_soft',
-                    'Grandeur_hard', 
-                    'Maverick_soft',
-                    'Maverick_hard']
+Kontakt_Pianos_all = [
+    'Gentleman_soft',
+    'Gentleman_hard', 
+    'Giant_soft',
+    'Giant_hard',
+    'Grandeur_soft',
+    'Grandeur_hard', 
+    'Maverick_soft',
+    'Maverick_hard',
+]
 Kontakt_Pianos_train = Kontakt_Pianos_all[:6]
+metadata_columns = [
+    'performance_id',  # "R_{number}"
+    'composer',  # composer (or "Christmas")
+    'piece_id',  # "{number}"
+    'title',  # title of the piece
+    'source',  # "MAPS", "ASAP" or "CPM"
+    'performance_audio_external',  # path to the external performance audio
+    'performance_MIDI_external',  # path to the external performance MIDI
+    'MIDI_score_external',  # path to the external MIDI score
+    'performance_beat_annotation_external',  # path to the external performance beat annotation
+    'score_beat_annotation_external',  # path to the external score beat annotation
+    'folder',  # folder to the audio, MIDI and annotation files
+    'performance_audio',  # performance audio file
+    'performance_MIDI',  # performance MIDI file
+    'MIDI_score',  # MIDI score file
+    'aligned',  # if the performance and score are aligned
+    'performance_beat_annotation',  # performance beat annotation file
+    'score_beat_annotation',  # score beat annotation file
+    'split',  # training/validation/testing
+]
 
 def get_distinct_pieces_dict():
     distinct_pieces = pd.read_csv('distinct_pieces.csv')
@@ -68,22 +92,7 @@ def get_CPM_metadata_dict(args):
 def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     print('Create Real recording subset...')
 
-    metadata_R = pd.DataFrame(columns=[
-        'performance_id',  # "R_{number}"
-        'composer',  # composer (or "Christmas")
-        'piece_id',  # "{number}"
-        'title',  # title of the piece
-        'source',  # "MAPS" or "ASAP"
-        'performance_audio_external',  # path to the external performance audio
-        'performance_MIDI_external',  # path to the external performance MIDI
-        'MIDI_score_external',  # path to the external MIDI score
-        'folder',  # folder to the audio and MIDI files
-        'performance_audio',  # path to the performance audio
-        'performance_MIDI',  # path to the performance MIDI
-        'MIDI_score',  # path to the MIDI score
-        'split',  # training/validation/testing
-        'aligned',  # if the performance and score are aligned
-    ])
+    metadata_R = pd.DataFrame(columns=metadata_columns)
     performance_count = 0
 
     ## MAPS "ENSTDkCl" and "ENSTDkAm" subsets
@@ -105,12 +114,16 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_audio_external = format_path(os.path.join('{MAPS}', MAPS_subset, 'MUS', item[:-4]+'.wav'))
             performance_MIDI_external = format_path(os.path.join('{A_MAPS}', item))
             MIDI_score_external = format_path(os.path.join('{A_MAPS}', item))  # same as performance MIDI
+            performance_beat_annotation_external = math.nan
+            score_beat_annotation_external = math.nan
             folder = format_path(os.path.join('subset_R', composer, f'{piece_id}_{title}'.replace("'", '_')))
             performance_audio = f'{performance_id}_MAPS.wav'
             performance_MIDI = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'
             MIDI_score = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'  # same as performance MIDI
-            split = 'testing'
             aligned = True
+            performance_beat_annotation = f'{performance_id}_A_MAPS_beat_annotation.csv'
+            score_beat_annotation = f'{performance_id}_A_MAPS_beat_annotation.csv'  # same as performance beat annotation
+            split = 'testing'
 
             # update split in distinct_pieces_dict
             distinct_pieces_dict['id2piece'][piece_id]['split'] = split
@@ -125,12 +138,16 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
                 performance_audio_external,
                 performance_MIDI_external,
                 MIDI_score_external,
+                performance_beat_annotation_external,
+                score_beat_annotation_external,
                 folder,
                 performance_audio,
                 performance_MIDI,
                 MIDI_score,
-                split,
                 aligned,
+                performance_beat_annotation,
+                score_beat_annotation,
+                split,
             ]
             performance_count += 1
 
@@ -152,12 +169,16 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_audio_external = format_path(os.path.join('{ASAP}', row['audio_performance']))
             performance_MIDI_external = format_path(os.path.join('{ASAP}', row['midi_performance']))
             MIDI_score_external = format_path(os.path.join('{ASAP}', row['midi_score']))
+            performance_beat_annotation_external = format_path(os.path.join('{ASAP}', row['performance_annotations']))
+            score_beat_annotation_external = format_path(os.path.join('{ASAP}', row['midi_score_annotations']))
             folder = format_path(os.path.join('subset_R', composer, f'{piece_id}_{title}'.replace("'", '_')))
             performance_audio = f'{performance_id}_ASAP.wav'
             performance_MIDI = f'{performance_id}_ASAP.mid'
             MIDI_score = f'ASAP_{row["folder"].split("/")[-1]}.mid'
-            split = distinct_pieces_dict['id2piece'][piece_id]['split']  # testing is the piece is already testing, update more testing later.
             aligned = ';'.join(ASAP_performance_annotations[2]) == ';'.join(ASAP_midi_score_annotations[2])
+            performance_beat_annotation = f'{performance_id}_ASAP_beat_annotation.csv'
+            score_beat_annotation = f'{MIDI_score[:-4]}_beat_annotation.csv'
+            split = distinct_pieces_dict['id2piece'][piece_id]['split']  # testing is the piece is already testing, update more testing later.
 
             # update metadata_R
             metadata_R.loc[performance_count] = [
@@ -169,12 +190,16 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
                 performance_audio_external,
                 performance_MIDI_external,
                 MIDI_score_external,
+                performance_beat_annotation_external,
+                score_beat_annotation_external,
                 folder,
                 performance_audio,
                 performance_MIDI,
                 MIDI_score,
-                split,
                 aligned,
+                performance_beat_annotation,
+                score_beat_annotation,
+                split,
             ]
             performance_count += 1
 
@@ -245,22 +270,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
 def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     print('Create Synthetic subset...')
 
-    metadata_S = pd.DataFrame(columns=[
-        'performance_id',  # "S_{number}"
-        'composer',  # composer (or "Christmas")
-        'piece_id',  # "{number}"
-        'title',  # title of the piece
-        'source',  # "MAPS", "ASAP" or "CPM"
-        'performance_audio_external',  # path to the performance audio
-        'performance_MIDI_external',  # path to the performance MIDI
-        'MIDI_score_external',  # path to the MIDI score
-        'folder',  # folder to the audio and MIDI files
-        'performance_audio',  # path to the performance audio
-        'performance_MIDI',  # path to the performance MIDI
-        'MIDI_score',  # path to the MIDI score
-        'split',  # training/validation/testing
-        'aligned',  # if the performance and score are aligned
-    ])
+    metadata_S = pd.DataFrame(columns=metadata_columns)
     performance_count = 0
 
     ## MAPS Synthetic subsets
@@ -282,12 +292,16 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_audio_external = format_path(os.path.join('{MAPS}', MAPS_subset, 'MUS', item[:-4]+'.wav'))
             performance_MIDI_external = format_path(os.path.join('{A_MAPS}', item))
             MIDI_score_external = format_path(os.path.join('{A_MAPS}', item))  # same as performance MIDI
+            performance_beat_annotation_external = math.nan
+            score_beat_annotation_external = math.nan
             folder = format_path(os.path.join('subset_S', composer, f'{piece_id}_{title}'.replace("'", '_')))
             performance_audio = f'{performance_id}_MAPS.wav'
             performance_MIDI = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'
             MIDI_score = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'  # same as performance MIDI
-            split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
             aligned = True
+            performance_beat_annotation = f'{performance_id}_A_MAPS_beat_annotation.csv'
+            score_beat_annotation = f'{performance_id}_A_MAPS_beat_annotation.csv'  # same as performance beat annotation
+            split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
 
             # update metadata_S
             metadata_S.loc[performance_count] = [
@@ -299,12 +313,16 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
                 performance_audio_external,
                 performance_MIDI_external,
                 MIDI_score_external,
+                performance_beat_annotation_external,
+                score_beat_annotation_external,
                 folder,
                 performance_audio,
                 performance_MIDI,
                 MIDI_score,
-                split,
                 aligned,
+                performance_beat_annotation,
+                score_beat_annotation,
+                split,
             ]
             performance_count += 1
 
@@ -324,12 +342,16 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         performance_audio_external = math.nan
         performance_MIDI_external = format_path(os.path.join('{ASAP}', row['midi_performance']))
         MIDI_score_external = format_path(os.path.join('{ASAP}', row['midi_score']))
+        performance_beat_annotation_external = format_path(os.path.join('{ASAP}', row['performance_annotations']))
+        score_beat_annotation_external = format_path(os.path.join('{ASAP}', row['midi_score_annotations']))
         folder = format_path(os.path.join('subset_S', composer, f'{piece_id}_{title}'.replace("'", '_')))
         performance_audio = f'{performance_id}_Kontakt.wav'
         performance_MIDI = f'{performance_id}_ASAP.mid'
         MIDI_score = f'ASAP_{row["folder"].split("/")[-1]}.mid'
-        split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
         aligned = ';'.join(ASAP_performance_annotations[2]) == ';'.join(ASAP_midi_score_annotations[2])
+        performance_beat_annotation = f'{performance_id}_ASAP_beat_annotation.csv'
+        score_beat_annotation = f'{MIDI_score[:-4]}_beat_annotation.csv'
+        split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
 
         # update metadata_S
         metadata_S.loc[performance_count] = [
@@ -341,12 +363,16 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_audio_external,
             performance_MIDI_external,
             MIDI_score_external,
+            performance_beat_annotation_external,
+            score_beat_annotation_external,
             folder,
             performance_audio,
             performance_MIDI,
             MIDI_score,
-            split,
             aligned,
+            performance_beat_annotation,
+            score_beat_annotation,
+            split,
         ]
         performance_count += 1
 
@@ -360,13 +386,17 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         source = 'CPM'
         performance_audio_external = math.nan
         performance_MIDI_external = format_path(os.path.join('{CPM}', CPM_piece['midi']))
-        MIDI_score_external = format_path(os.path.join('{CPM}', CPM_piece['midi']))
+        MIDI_score_external = format_path(os.path.join('{CPM}', CPM_piece['midi']))  # same as performance MIDI
+        performance_beat_annotation_external = math.nan
+        score_beat_annotation_external = math.nan
         folder = format_path(os.path.join('subset_S', composer, f'{piece_id}_{title}'.replace("'", '_')))
         performance_audio = f'{performance_id}_Kontakt.wav'
         performance_MIDI = f'{performance_id}_CPM.mid'
         MIDI_score = f'{performance_id}_CPM.mid'  # same as performance midi
-        split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
         aligned = True
+        performance_beat_annotation = f'{performance_id}_CPM_beat_annotation.csv'
+        score_beat_annotation = f'{performance_id}_CPM_beat_annotation.csv'  # same as performance beat annotation
+        split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
 
         # update metadata_S
         metadata_S.loc[performance_count] = [
@@ -378,12 +408,16 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_audio_external,
             performance_MIDI_external,
             MIDI_score_external,
+            performance_beat_annotation_external,
+            score_beat_annotation_external,
             folder,
             performance_audio,
             performance_MIDI,
             MIDI_score,
-            split,
             aligned,
+            performance_beat_annotation,
+            score_beat_annotation,
+            split,
         ]
         performance_count += 1
 
@@ -470,6 +504,54 @@ def copy_midi_files(metadata, subset, args):
             time.sleep(0.02)
     print()
 
+def get_beat_annotations(metadata, subset, args):
+    print('Get beat annotations...')
+    print(subset)
+
+    for i, row in metadata.iterrows():
+        print(i+1, '/', len(metadata), end='\r')
+
+        performance_beat_annotation_internal = os.path.join(load_path(row['folder']), row['performance_beat_annotation'])
+        score_beat_annotation_internal = os.path.join(load_path(row['folder']), row['score_beat_annotation'])
+
+        if not os.path.exists(performance_beat_annotation_internal) or not os.path.exists(score_beat_annotation_internal):
+
+            if row['source'] == 'ASAP':  # copy annotation files
+                performance_beat_annotation_external = load_path(row['performance_beat_annotation_external']).format(ASAP=args.ASAP)
+                score_beat_annotation_external = load_path(row['score_beat_annotation_external']).format(ASAP=args.ASAP)
+
+                subprocess.check_output(['cp', performance_beat_annotation_external, performance_beat_annotation_internal])
+                time.sleep(0.02)
+                subprocess.check_output(['cp', score_beat_annotation_external, score_beat_annotation_internal])
+                time.sleep(0.02)
+
+            else:  # generate annotation files (performance MIDI and MIDI score are the same)
+                MIDI_file = os.path.join(load_path(row['folder']), row['performance_MIDI'])
+                midi_data = pm.PrettyMIDI(MIDI_file)
+
+                beats = midi_data.get_beats()
+                downbeats_set = set(midi_data.get_downbeats())
+                time2timesig_change = defaultdict(str, dict([(ts.time, f'{ts.numerator}/{ts.denominator}') for ts in midi_data.time_signature_changes]))
+                time2keysig_change = defaultdict(str, dict([(ks.time, str(ks.key_number)) for ks in midi_data.key_signature_changes]))
+
+                labels = []
+                for beat in beats:
+                    beat_label = 'b' if beat not in downbeats_set else 'db'
+                    time_label = time2timesig_change[beat]
+                    key_label = time2keysig_change[beat]
+                    if key_label:
+                        label = ','.join([beat_label, time_label, key_label])
+                    elif time_label:
+                        label = ','.join([beat_label, time_label])
+                    else:
+                        label = beat_label
+                    labels.append(label)
+                
+                annotation_df = pd.DataFrame({0: list(beats), 1: list(beats), 2: labels})
+                annotation_df.to_csv(performance_beat_annotation_internal, sep='\t', header=None, index=False)
+
+    print()
+
 def copy_audio_files(metadata, subset, args):
     print('Copy audio files from external sources...')
     print(subset)
@@ -487,11 +569,6 @@ def copy_audio_files(metadata, subset, args):
                 subprocess.check_output(['cp', performance_audio_external, performance_audio_internal])
                 time.sleep(0.02)
     print()
-
-def get_beat_annotations(args):
-    print('Get beat & downbeat annotations...')
-
-    
 
 if __name__ == '__main__':
 
@@ -528,15 +605,15 @@ if __name__ == '__main__':
     metadata_S.to_csv('metadata_S.csv', index=False)
     update_distinct_pieces(distinct_pieces_dict)
 
-    ## performance MIDIs and MIDI scores
-    copy_midi_files(metadata_R, 'subset_R', args)
-    copy_midi_files(metadata_S, 'subset_S', args)
+    ## get performance MIDIs and MIDI scores
+    copy_midi_files(metadata_R, 'Real recording subset', args)
+    copy_midi_files(metadata_S, 'Synthetic subset', args)
 
-    ## performance audios
+    ## get beat annotations
+    get_beat_annotations(metadata_R, 'Real recording subset', args)
+    get_beat_annotations(metadata_S, 'Synthetic subset', args)
+
+    ## get performance audios
     # copy_audio_files(metadata_R, 'subset_R', args)
     # copy_audio_files(metadata_S, 'subset_S', args)
     # synthesize Kontakt audio files in reaper
-
-    ## beat & downbeat annotations
-    get_beat_annotations(args)
-    

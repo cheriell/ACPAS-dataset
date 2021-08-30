@@ -39,17 +39,12 @@ This subset covers performances with synthetic audios from the following three s
 
 The data is structured as follows:
 
-    |-- subset_R
-    |   |-- composer
-    |   |   |-- {piece_id}_{title}
-    |   |       |-- {performance_id}_{source_code}.wav  # performance audio
-    |   |       |-- {performance_id}_{source_code}.mid  # performance MIDI
-    |   |       |-- {source_code}.mid                   # MIDI score
-    |   |-- metadata_R.csv
-    |-- subset_S
-        |-- composer
+    |-- subset_{subset}
+        |-- {composer}
         |   |-- {piece_id}_{title}
         |       |-- {performance_id}_{source_code}.wav  # performance audio
         |       |-- {performance_id}_{source_code}.mid  # performance MIDI
         |       |-- {source_code}.mid                   # MIDI score
-        |-- metadata_S.csv
+        |       |-- {performance_beat_annotation}.csv   # performance beat annotation
+        |       |-- {score_beat_annotation}.csv         # score beat annotation
+        |-- metadata_{subset}.csv
