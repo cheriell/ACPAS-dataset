@@ -40,14 +40,6 @@ This subset covers performances with real recordings from the MAPS "ENSTDkCl" an
 
 The perforamnces from the MAPS dataset are for testing only. This is to keep inline with test data in other AMT works. The other performances from the MAESTRO dataset are divided into training, validation and testing splits.
 
-|  Source   |    Split   | Pieces | Performances | Duration (hours) |
-|:---------:|:----------:|:------:|:------------:|:----------------:|
-|   MAPS    |   testing  |   52   |     59       |       4.28       |
-|   ASAP    |  training  |  136   |    417       |      35.48       |
-|   ASAP    | validation |   17   |     47       |       3.35       |
-|   ASAP    |   testing  |   17   |     55       |       5.85       |
-| **Total** |     --     |  215   |    578       |      48.96       |
-
 ### Synthetic subset
 
 This subset covers performances with synthetic audios from the following three sources, in total **1611 performances**: 
@@ -57,9 +49,15 @@ This subset covers performances with synthetic audios from the following three s
 
 We make use of four different piano models provided in the Native Instrument Kontakt Player, and tune the piano font to be soft or hard. This end up with 8 different piano fonts. During synthesis, we add some level of reverberation to simulate real recordings. We reserve one piano model (both soft and hard fonts) to only be used for testing only. The other three piano models (6 fonts) are used for both training/validaton and testing sets.
 
-|    Split   | Pieces | Performances | Duration (hours) |
-|:----------:|:------:|:------------:|:----------------:|
-|  training  |   386  |     1260     |    101.66        |
-| validation |   49   |      123     |     8.57         |
-|   testing  |   62   |      228     |     20.58        |
-|  **Total** |   497  |     1611     |    130.81        |
+|       Subset       |  Source   |    Split   | Pieces | Performances | Duration (hours) |
+|:------------------:|:---------:|:----------:|:------:|:------------:|:----------------:|
+|   Real recording   |   MAPS    |   testing  |   52   |      59      |     4.28         |
+|   Real recording   |   ASAP    |  training  |   136  |      417     |     35.48        |
+|   Real recording   |   ASAP    | validation |   17   |      47      |     3.35         |
+|   Real recording   |   ASAP    |   testing  |   17   |      55      |     5.85         |
+| **Real recording** | **Total** |     --     |   215  |      578     |     48.96        |
+|     Synthetic      |    --     |  training  |   386  |     1260     |    101.66        |
+|     Synthetic      |    --     | validation |   49   |      123     |     8.57         |
+|     Synthetic      |    --     |   testing  |   62   |      228     |     20.58        |
+|   **Synthetic**    |    --     |  **Total** |   497  |     1611     |    130.81        |
+|     **Total**      |    --     |     --     |   497  |     2189     |    179.77        |
