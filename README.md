@@ -9,13 +9,12 @@ List of source AMT datasets:
 - [A-MAPS dataset](http://c4dm.eecs.qmul.ac.uk/ycart/a-maps.html)
 - [Classical Piano MIDI (CPM) dataset](http://www.piano-midi.de/)
 - [Aligned Scores and Performances (ASAP) dataset](https://github.com/fosfrancesco/asap-dataset)
-- [MAESTRO dataset](https://magenta.tensorflow.org/datasets/maestro)
 
 In this document, we describe a piece of music composition as a **music piece**, a version of music score to the composition as a **music score**, and a music performance to a specific music score as a **music performance**. Thus, one music piece can have multiple versions of music scores (due to e.g. different repeats), and one music score can be mapped to multiple versions of music performances.
 
 Due to different sources of data, the performances can be human performances (from the ASAP dataset) or hand-crafted tempos and dynamics to sound like human performances (from MAPS dataset and Classical Piano MIDI Page).
 
-## Dataset Structure
+## Dataset Contents
 
 **ACPAS** dataset is composed of two subsets:
 - **Real recording subset**

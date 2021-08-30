@@ -12,7 +12,7 @@ from utilities import format_path, load_path, mkdir
 
 Kontakt_Pianos_all = ['Gentleman_soft',
                     'Gentleman_hard', 
-                    'Giant_soft', 
+                    'Giant_soft',
                     'Giant_hard',
                     'Grandeur_soft',
                     'Grandeur_hard', 
@@ -82,6 +82,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         'performance_MIDI',  # path to the performance MIDI
         'MIDI_score',  # path to the MIDI score
         'split',  # training/validation/testing
+        'aligned',  # if the performance and score are aligned
     ])
     performance_count = 0
 
@@ -109,6 +110,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_MIDI = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'
             MIDI_score = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'  # same as performance MIDI
             split = 'testing'
+            aligned = True
 
             # update split in distinct_pieces_dict
             distinct_pieces_dict['id2piece'][piece_id]['split'] = split
@@ -128,6 +130,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
                 performance_MIDI,
                 MIDI_score,
                 split,
+                aligned,
             ]
             performance_count += 1
 
@@ -138,6 +141,8 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             
             # get metadata
             ASAP_title = row['title']
+            ASAP_performance_annotations = pd.read_csv(os.path.join(args.ASAP, load_path(row['performance_annotations'])), sep='\t', header=None)
+            ASAP_midi_score_annotations = pd.read_csv(os.path.join(args.ASAP, load_path(row['midi_score_annotations'])), sep='\t', header=None)
 
             performance_id = 'R_' + str(performance_count + 1)
             composer = row['composer']
@@ -152,6 +157,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_MIDI = f'{performance_id}_ASAP.mid'
             MIDI_score = f'ASAP_{row["folder"].split("/")[-1]}.mid'
             split = distinct_pieces_dict['id2piece'][piece_id]['split']  # testing is the piece is already testing, update more testing later.
+            aligned = ';'.join(ASAP_performance_annotations[2]) == ';'.join(ASAP_midi_score_annotations[2])
 
             # update metadata_R
             metadata_R.loc[performance_count] = [
@@ -168,6 +174,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
                 performance_MIDI,
                 MIDI_score,
                 split,
+                aligned,
             ]
             performance_count += 1
 
@@ -252,6 +259,7 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         'performance_MIDI',  # path to the performance MIDI
         'MIDI_score',  # path to the MIDI score
         'split',  # training/validation/testing
+        'aligned',  # if the performance and score are aligned
     ])
     performance_count = 0
 
@@ -279,6 +287,7 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_MIDI = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'
             MIDI_score = f'{performance_id}_A_MAPS_{short_name}_{MAPS_subset}.mid'  # same as performance MIDI
             split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
+            aligned = True
 
             # update metadata_S
             metadata_S.loc[performance_count] = [
@@ -295,6 +304,7 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
                 performance_MIDI,
                 MIDI_score,
                 split,
+                aligned,
             ]
             performance_count += 1
 
@@ -303,6 +313,8 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     for i, row in metadata_ASAP.iterrows():
         # get metadata
         ASAP_title = row['title']
+        ASAP_performance_annotations = pd.read_csv(os.path.join(args.ASAP, load_path(row['performance_annotations'])), sep='\t', header=None)
+        ASAP_midi_score_annotations = pd.read_csv(os.path.join(args.ASAP, load_path(row['midi_score_annotations'])), sep='\t', header=None)
 
         performance_id = 'S_' + str(performance_count + 1)
         composer = row['composer']
@@ -317,6 +329,7 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         performance_MIDI = f'{performance_id}_ASAP.mid'
         MIDI_score = f'ASAP_{row["folder"].split("/")[-1]}.mid'
         split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
+        aligned = ';'.join(ASAP_performance_annotations[2]) == ';'.join(ASAP_midi_score_annotations[2])
 
         # update metadata_S
         metadata_S.loc[performance_count] = [
@@ -333,6 +346,7 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_MIDI,
             MIDI_score,
             split,
+            aligned,
         ]
         performance_count += 1
 
@@ -352,6 +366,7 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         performance_MIDI = f'{performance_id}_CPM.mid'
         MIDI_score = f'{performance_id}_CPM.mid'  # same as performance midi
         split = distinct_pieces_dict['id2piece'][piece_id]['split']  # using the existing split first and update the empty ones later
+        aligned = True
 
         # update metadata_S
         metadata_S.loc[performance_count] = [
@@ -368,6 +383,7 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_MIDI,
             MIDI_score,
             split,
+            aligned,
         ]
         performance_count += 1
 
@@ -472,6 +488,11 @@ def copy_audio_files(metadata, subset, args):
                 time.sleep(0.02)
     print()
 
+def get_beat_annotations(args):
+    print('Get beat & downbeat annotations...')
+
+    
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -502,12 +523,20 @@ if __name__ == '__main__':
     distinct_pieces_dict, metadata_R =  create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args)
     distinct_pieces_dict, metadata_S = create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args)
 
+    ## save metadata
     metadata_R.to_csv('metadata_R.csv', index=False)
     metadata_S.to_csv('metadata_S.csv', index=False)
-    
     update_distinct_pieces(distinct_pieces_dict)
 
+    ## performance MIDIs and MIDI scores
     copy_midi_files(metadata_R, 'subset_R', args)
     copy_midi_files(metadata_S, 'subset_S', args)
+
+    ## performance audios
     # copy_audio_files(metadata_R, 'subset_R', args)
     # copy_audio_files(metadata_S, 'subset_S', args)
+    # synthesize Kontakt audio files in reaper
+
+    ## beat & downbeat annotations
+    get_beat_annotations(args)
+    
