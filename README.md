@@ -16,54 +16,45 @@ Due to different sources of data, the performances can be human performances (fr
 
 ## Dataset Contents
 
-**ACPAS** dataset is composed of two subsets:
-- **Real recording subset**
-- **Synthetic subset**
-
-The data is structured as follows:
-
-    |-- subset_{subset}
-    |   |-- {composer}
-    |       |-- {piece_id}_{title}
-    |           |-- {performance_id}_{source_code}.wav  # performance audio
-    |           |-- {performance_id}_{source_code}.mid  # performance MIDI
-    |           |-- {source_description}.mid            # MIDI score
-    |           |-- {performance_beat_annotation}.csv   # performance beat annotation
-    |           |-- {score_beat_annotation}.csv         # score beat annotation
-    |-- metadata_{subset}.csv
+**ACPAS** dataset is composed of a **Real recording subset** and a **Synthetic subset**.
 
 ### Real recording subset
 
 This subset covers performances with real recordings from the MAPS "ENSTDkCl" and "ENSTDkAm" subsets and the MAESTRO dataset, in total **578 performances**. The corresponding MIDI scores and annotations are from the A-MAPS dataset and the ASAP dataset.
 
-The perforamnces from the MAPS dataset are for testing only. This is to keep inline with test data in other AMT works. The other performances from the MAESTRO dataset are divided into training, validation and testing splits.
-
 ### Synthetic subset
 
-This subset covers performances with synthetic audios from the following three sources, in total **1611 performances**: 
+This subset covers performances with synthetic audios from the following three sources, in total **1611 performances**:
+
 1. Performance audio and MIDI from the MAPS synthetic subsets, and MIDI score from the A-MAPS dataset.
 2. MIDI performance and score from the ASAP dataset, and audio files synthesized from performance MIDIs using [Native Instrument Kontakt Player](https://www.native-instruments.com/en/products/komplete/samplers/kontakt-6-player/).
 3. MIDI performance and score from the CPM dataset, and audio files synthesized from performance MIDIs using Native Instrument Kontakt Player.
 
 We make use of four different piano models provided in the Native Instrument Kontakt Player, and tune the piano font to be soft or hard. This end up with 8 different piano fonts. During synthesis, we add some level of reverberation to simulate real recordings. We reserve one piano model (both soft and hard fonts) to only be used for testing only. The other three piano models (6 fonts) are used for both training/validaton and testing sets.
 
-|     Subset     | Source |    Split   | Pieces | Performances | Duration (hours) |
-|:--------------:|:------:|:----------:|:------:|:------------:|:----------------:|
-| Real recording |  MAPS  |    test    |   52   |      59      |     4.277917     |
-| Real recording |  ASAP  |    train   |   109  |      368     |     32.737423    |
-| Real recording |  ASAP  | validation |   17   |      49      |     2.524508     |
-| Real recording |  ASAP  |    test    |   44   |      102     |     9.420974     |
-| Real recording |  Total |     --     |   215  |      578     |     48.960822    |
-|                |        |            |        |              |                  |
-|    Synthetic   |   --   |    train   |   359  |     1155     |     94.958975    |
-|    Synthetic   |   --   | validation |   49   |      135     |     8.669080     |
-|    Synthetic   |   --   |    test    |   89   |      321     |     27.178842    |
-|    Synthetic   |   --   |    Total   |   497  |     1611     |    130.806897    |
-|                |        |            |        |              |                  |
-|      Both      |   --   |    train   |   359  |     1523     |    127.696398    |
-|      Both      |   --   | validation |   49   |      184     |     11.193588    |
-|      Both      |   --   |    test    |   89   |      482     |     40.877733    |
-|      Both      |   --   |    Total   |   497  |     2189     |    179.767718    |
+## Dataset Statistics
+
+The dataset is splitted into train/validation/test in a way that there is no overlap between pieces over the whole dataset. To keep in line with the MAPS and MAESTRO train/test split, we reserve all the MAPS real recording pieces and the testing pieces in MAESTRO-v2.0.0 to the test split. However, the training/validation split is randomly selected.
+
+Below are the basic statistics of this dataset:
+
+|     Subset     | Source |    Split   | Distinct Pieces | Performances | Duration (hours) |
+|:--------------:|:------:|:----------:|:---------------:|:------------:|:----------------:|
+| Real recording |  MAPS  |    test    |        52       |      59      |     4.277917     |
+| Real recording |  ASAP  |    train   |        109      |      368     |     32.737423    |
+| Real recording |  ASAP  | validation |        17       |      49      |     2.524508     |
+| Real recording |  ASAP  |    test    |        44       |      102     |     9.420974     |
+| Real recording |  Both  |    Total   |        215      |      578     |     48.960822    |
+|                |        |            |                 |              |                  |
+|    Synthetic   |   --   |    train   |        359      |     1155     |     94.958975    |
+|    Synthetic   |   --   | validation |        49       |      135     |     8.669080     |
+|    Synthetic   |   --   |    test    |        89       |      321     |     27.178842    |
+|    Synthetic   |   --   |    Total   |        497      |     1611     |    130.806897    |
+|                |        |            |                 |              |                  |
+|      Both      |   --   |    train   |        359      |     1523     |    127.696398    |
+|      Both      |   --   | validation |        49       |      184     |     11.193588    |
+|      Both      |   --   |    test    |        89       |      482     |     40.877733    |
+|      Both      |   --   |    Total   |        497      |     2189     |    179.767718    |
 
 ## Metadata
 
@@ -95,3 +86,14 @@ The parameters in the two `metadata_X.csv` file are:
 - `duration`: duration of the performance in seconds.
 - `split`: train/validation/test split.
 
+The data is structured as follows:
+
+    |-- subset_{subset}
+    |   |-- {composer}
+    |       |-- {piece_id}_{title}
+    |           |-- {performance_id}_{source_code}.wav  # performance audio
+    |           |-- {performance_id}_{source_code}.mid  # performance MIDI
+    |           |-- {source_description}.mid            # MIDI score
+    |           |-- {performance_beat_annotation}.csv   # performance beat annotation
+    |           |-- {score_beat_annotation}.csv         # score beat annotation
+    |-- metadata_{subset}.csv
