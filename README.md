@@ -59,7 +59,7 @@ We make use of four different piano models provided in the Native Instrument Kon
 |    Synthetic   |   --   | validation |   49   |      135     |     8.669080     |
 |    Synthetic   |   --   |    test    |   89   |      321     |     27.178842    |
 |    Synthetic   |   --   |    Total   |   497  |     1611     |    130.806897    |
-|
+|                |        |            |        |              |                  |
 |      Both      |   --   |    train   |   359  |     1523     |    127.696398    |
 |      Both      |   --   | validation |   49   |      184     |     11.193588    |
 |      Both      |   --   |    test    |   89   |      482     |     40.877733    |
