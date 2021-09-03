@@ -42,10 +42,10 @@ metadata_columns = [
     'performance_beat_annotation',  # performance beat annotation file
     'score_beat_annotation',  # score beat annotation file
     'duration',  # duration of the performance in seconds
-    'split',  # training/validation/testing
+    'split',  # train/validation/test
 ]
 
-def get_distinct_pieces_dict():
+def get_distinct_pieces_dict(args):
     distinct_pieces = pd.read_csv('distinct_pieces.csv')
     distinct_pieces_dict = {
         'id2piece': {},
@@ -64,6 +64,22 @@ def get_distinct_pieces_dict():
             distinct_pieces_dict['composer_ASAP_title2id']['_'.join([row['composer'], row['ASAP_title']])] = row['id']
         if type(row['CPM_title']) == str:
             distinct_pieces_dict['composer_CPM_title2id']['_'.join([row['composer'], row['CPM_title']])] = row['id']
+
+    # allocate pieces in the MAESTRO test set to test
+    MAESTRO_metadata = pd.read_csv(os.path.join(args.MAESTRO, 'maestro-v2.0.0.csv'))
+    ASAP_metadata = pd.read_csv(os.path.join(args.ASAP, 'metadata.csv'))
+
+    maestro_midi_filename2split = dict([(row['midi_filename'], row['split']) for i, row in MAESTRO_metadata.iterrows()])
+    for i, row in ASAP_metadata.iterrows():
+        ASAP_title = row['title']
+        maestro_midi_filename = row['maestro_midi_performance']
+
+        if type(maestro_midi_filename) != float:
+            maestro_split = maestro_midi_filename2split[maestro_midi_filename[10:]]
+
+            if maestro_split == 'test':
+                piece_id = distinct_pieces_dict['composer_ASAP_title2id']['_'.join([row['composer'], row['title']])]
+                distinct_pieces_dict['id2piece'][piece_id]['split'] = 'test'
 
     return distinct_pieces_dict
 
@@ -90,7 +106,9 @@ def get_CPM_metadata_dict(args):
 
     return CPM_metadata_dict
 
-def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
+def create_real_recording_subset(distinct_pieces_dict, 
+                                CPM_metadata_dict, 
+                                args):
     print('\nCreate Real recording subset...')
 
     metadata_R = pd.DataFrame(columns=metadata_columns)
@@ -125,7 +143,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_beat_annotation = f'{performance_id}_A_MAPS_beat_annotation.csv'
             score_beat_annotation = f'{performance_id}_A_MAPS_beat_annotation.csv'  # same as performance beat annotation
             duration = math.nan
-            split = 'testing'
+            split = 'test'
 
             # update split in distinct_pieces_dict
             distinct_pieces_dict['id2piece'][piece_id]['split'] = split
@@ -182,7 +200,7 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             performance_beat_annotation = f'{performance_id}_ASAP_beat_annotation.csv'
             score_beat_annotation = f'{MIDI_score[:-4]}_beat_annotation.csv'
             duration = math.nan
-            split = distinct_pieces_dict['id2piece'][piece_id]['split']  # testing is the piece is already testing, update more testing later.
+            split = distinct_pieces_dict['id2piece'][piece_id]['split']  # use existing split here, update later
 
             # update metadata_R
             metadata_R.loc[performance_count] = [
@@ -208,20 +226,23 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
             ]
             performance_count += 1
 
-    ## udpate training/validation/testing split for ASAP real recording performances
+    ## udpate train/validation/test split for ASAP real recording performances
     # all pieces from ASAP
     ASAP_piece_id_all = set([row['piece_id'] for i, row in metadata_R.iterrows() if row['source'] == 'ASAP'])
-    # training/validation/testing amounts
-    training_amount = len(ASAP_piece_id_all) * 8 // 10
+    # train/validation/test amounts
+    train_amount = len(ASAP_piece_id_all) * 8 // 10
     validation_amount = len(ASAP_piece_id_all) // 10
-    testing_amount = len(ASAP_piece_id_all) - training_amount - validation_amount
+    test_amount = len(ASAP_piece_id_all) - train_amount - validation_amount
 
-    # pieces already split to testing
-    ASAP_piece_id_testing_cur = set([piece_id for piece_id in ASAP_piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'testing'])
-    ASAP_piece_id_remaining = ASAP_piece_id_all - ASAP_piece_id_testing_cur
-    # random select some other pieces for testing
-    ASAP_piece_id_testing_additional = set(random.sample(ASAP_piece_id_remaining, testing_amount - len(ASAP_piece_id_testing_cur)))
-    ASAP_piece_id_remaining -= ASAP_piece_id_testing_additional
+    # pieces already split to test
+    ASAP_piece_id_test_cur = set([piece_id for piece_id in ASAP_piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'test'])
+    ASAP_piece_id_remaining = ASAP_piece_id_all - ASAP_piece_id_test_cur
+    # random select some other pieces for test
+    if test_amount > len(ASAP_piece_id_test_cur):
+        ASAP_piece_id_test_additional = set(random.sample(ASAP_piece_id_remaining, test_amount - len(ASAP_piece_id_test_cur)))
+        ASAP_piece_id_remaining -= ASAP_piece_id_test_additional
+    else:
+        ASAP_piece_id_test_additional = {}
     # random select pieces for validation
     ASAP_piece_id_validation = set(random.sample(ASAP_piece_id_remaining, validation_amount))
     ASAP_piece_id_remaining -= ASAP_piece_id_validation
@@ -229,26 +250,28 @@ def create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     # update split in metadata_R
     for i, row in metadata_R.iterrows():
         if type(row['split']) == float:
-            if row['piece_id'] in ASAP_piece_id_testing_additional:
-                metadata_R.loc[i, 'split'] = 'testing'
+            if row['piece_id'] in ASAP_piece_id_test_additional:
+                metadata_R.loc[i, 'split'] = 'test'
             elif row['piece_id'] in ASAP_piece_id_validation:
                 metadata_R.loc[i, 'split'] = 'validation'
             elif row['piece_id'] in ASAP_piece_id_remaining:
-                metadata_R.loc[i, 'split'] = 'training'
+                metadata_R.loc[i, 'split'] = 'train'
             else:
                 print('check error!')
     # update split in distinct_pieces_dict
     for piece_id in distinct_pieces_dict['id2piece'].keys():
-        if piece_id in ASAP_piece_id_testing_additional:
-            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'testing'
+        if piece_id in ASAP_piece_id_test_additional:
+            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'test'
         elif piece_id in ASAP_piece_id_validation:
             distinct_pieces_dict['id2piece'][piece_id]['split'] = 'validation'
         elif piece_id in ASAP_piece_id_remaining:
-            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'training'
+            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'train'
 
     return distinct_pieces_dict, metadata_R
             
-def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
+def create_synthetic_subset(distinct_pieces_dict, 
+                            CPM_metadata_dict, 
+                            args):
     print('\nCreate Synthetic subset...')
 
     metadata_S = pd.DataFrame(columns=metadata_columns)
@@ -408,24 +431,24 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
         ]
         performance_count += 1
 
-    ## split into training/validation and testing
+    ## split into train/validation and test
     piece_id_all = set(metadata_S.loc[:, 'piece_id'])
-    # training/validation/testing amounts
-    training_amount = len(piece_id_all) * 8 // 10
+    # train/validation/test amounts
+    train_amount = len(piece_id_all) * 8 // 10
     validation_amount = len(piece_id_all) // 10
-    testing_amount = len(piece_id_all) - training_amount - validation_amount
+    test_amount = len(piece_id_all) - train_amount - validation_amount
 
     # pieces already splitted
-    piece_id_training_cur = set([piece_id for piece_id in piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'training'])
+    piece_id_train_cur = set([piece_id for piece_id in piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'train'])
     piece_id_validation_cur = set([piece_id for piece_id in piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'validation'])
-    piece_id_testing_cur = set([piece_id for piece_id in piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'testing'])
-    piece_id_remaining = piece_id_all - piece_id_training_cur - piece_id_validation_cur - piece_id_testing_cur
-    # random select some other for testing
-    if len(piece_id_testing_cur) < testing_amount:
-        piece_id_testing_additional = set(random.sample(piece_id_remaining, testing_amount - len(piece_id_testing_cur)))
-        piece_id_remaining -= piece_id_testing_additional
+    piece_id_test_cur = set([piece_id for piece_id in piece_id_all if distinct_pieces_dict['id2piece'][piece_id]['split'] == 'test'])
+    piece_id_remaining = piece_id_all - piece_id_train_cur - piece_id_validation_cur - piece_id_test_cur
+    # random select some other for test
+    if len(piece_id_test_cur) < test_amount:
+        piece_id_test_additional = set(random.sample(piece_id_remaining, test_amount - len(piece_id_test_cur)))
+        piece_id_remaining -= piece_id_test_additional
     else:
-        piece_id_testing_additional = {}
+        piece_id_test_additional = {}
     if len(piece_id_validation_cur) < validation_amount:
         piece_id_validation_additional = set(random.sample(piece_id_remaining, validation_amount - len(piece_id_validation_cur)))
         piece_id_remaining -= piece_id_validation_additional
@@ -435,27 +458,27 @@ def create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args):
     # update split in metadata_S
     for i, row in metadata_S.iterrows():
         if type(row['split']) == float:
-            if row['piece_id'] in piece_id_testing_additional:
-                metadata_S.loc[i, 'split'] = 'testing'
+            if row['piece_id'] in piece_id_test_additional:
+                metadata_S.loc[i, 'split'] = 'test'
             elif row['piece_id'] in piece_id_validation_additional:
                 metadata_S.loc[i, 'split'] = 'validation'
             elif row['piece_id'] in piece_id_remaining:
-                metadata_S.loc[i, 'split'] = 'training'
+                metadata_S.loc[i, 'split'] = 'train'
             else:
                 print('check error!')
     # update split in distinct_pieces_dict
     for piece_id in distinct_pieces_dict['id2piece'].keys():
-        if piece_id in piece_id_testing_additional:
-            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'testing'
+        if piece_id in piece_id_test_additional:
+            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'test'
         elif piece_id in piece_id_validation_additional:
             distinct_pieces_dict['id2piece'][piece_id]['split'] = 'validation'
         elif piece_id in piece_id_remaining:
-            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'training'
+            distinct_pieces_dict['id2piece'][piece_id]['split'] = 'train'
 
-    ## Allocate Kontakt Piano according to the training/validation/testing split
+    ## Allocate Kontakt Piano according to the train/validation/test split
     for i, row in metadata_S.iterrows():
         if type(row['performance_audio_external']) == float:
-            if row['split'] == 'testing':
+            if row['split'] == 'test':
                 piano = random.choice(Kontakt_Pianos_all)
             else:
                 piano = random.choice(Kontakt_Pianos_train)
@@ -589,13 +612,21 @@ if __name__ == '__main__':
                         default='C:\\Users\\Marco\\Downloads\\Datasets\\asap-dataset',
                         # default='/import/c4dm-datasets/ASAP_dataset/asap-dataset-1.1',
                         help='Path to the ASAP dataset')
+    parser.add_argument('--MAESTRO',
+                        type=str,
+                        default='C:\\Users\\Marco\\Downloads\\Datasets\\maestro-v2.0.0',
+                        help='Path to the MAESTRO-v2.0.0 dataset')
     args = parser.parse_args()
 
-    distinct_pieces_dict = get_distinct_pieces_dict()  # original distinct pieces are manually checked
     CPM_metadata_dict = get_CPM_metadata_dict(args)
+    distinct_pieces_dict = get_distinct_pieces_dict(args)  # original distinct pieces are manually checked
 
-    distinct_pieces_dict, metadata_R =  create_real_recording_subset(distinct_pieces_dict, CPM_metadata_dict, args)
-    distinct_pieces_dict, metadata_S = create_synthetic_subset(distinct_pieces_dict, CPM_metadata_dict, args)
+    distinct_pieces_dict, metadata_R =  create_real_recording_subset(distinct_pieces_dict, 
+                                                                    CPM_metadata_dict, 
+                                                                    args)
+    distinct_pieces_dict, metadata_S = create_synthetic_subset(distinct_pieces_dict, 
+                                                                CPM_metadata_dict, 
+                                                                args)
     update_distinct_pieces(distinct_pieces_dict)
 
     ## get performance MIDIs and MIDI scores
@@ -611,8 +642,8 @@ if __name__ == '__main__':
     get_beat_annotations(metadata_S, 'Synthetic subset', args)
 
     ## get performance audios
-    # copy_audio_files(metadata_R, 'subset_R', args)
-    # copy_audio_files(metadata_S, 'subset_S', args)
+    # copy_audio_files(metadata_R, 'Real recording subset', args)
+    # copy_audio_files(metadata_S, 'Synthetic subset', args)
     # synthesize Kontakt audio files in reaper
 
     ## save metadata

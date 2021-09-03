@@ -2,3 +2,5 @@ __pycache__/
 audio_files/
 audio_files_copied/
 batches/
+subset_R/
+subset_S/
