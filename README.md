@@ -54,7 +54,7 @@ We make use of four different piano models provided in the Native Instrument Kon
 | Real recording |  ASAP  | validation |   17   |      49      |     2.524508     |
 | Real recording |  ASAP  |    test    |   44   |      102     |     9.420974     |
 | Real recording |  Total |     --     |   215  |      578     |     48.960822    |
-|
+|                |        |            |        |              |                  |
 |    Synthetic   |   --   |    train   |   359  |     1155     |     94.958975    |
 |    Synthetic   |   --   | validation |   49   |      135     |     8.669080     |
 |    Synthetic   |   --   |    test    |   89   |      321     |     27.178842    |
