@@ -54,7 +54,7 @@ def two_hand_parts(metadata):
 
         if len(midi_data.instruments) != 2:
             print('\nNope.', row['performance_id'], 'source:', row['source'], 'hand parts:', len(midi_data.instruments))
-            # return
+            return
     print('Yes!')
 
 
@@ -64,6 +64,6 @@ if __name__ == '__main__':
     metadata_S = pd.read_csv('metadata_S.csv')
     metadata = pd.concat([metadata_R, metadata_S], ignore_index=True)
 
-    # all_files_exist(metadata)
-    # MIDI_score_annotation_matched(metadata)
+    all_files_exist(metadata)
+    MIDI_score_annotation_matched(metadata)
     two_hand_parts(metadata)
