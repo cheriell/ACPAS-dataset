@@ -86,14 +86,14 @@ The parameters in the two `metadata_X.csv` file are:
 - `duration`: duration of the performance in seconds.
 - `split`: train/validation/test split.
 
-The data is structured as follows:
+The corresponding files are provided in the following locations:
 
-    |-- subset_{subset}
-    |   |-- {composer}
-    |       |-- {piece_id}_{title}
-    |           |-- {performance_id}_{source_code}.wav  # performance audio
-    |           |-- {performance_id}_{source_code}.mid  # performance MIDI
-    |           |-- {source_description}.mid            # MIDI score
-    |           |-- {performance_beat_annotation}.csv   # performance beat annotation
-    |           |-- {score_beat_annotation}.csv         # score beat annotation
-    |-- metadata_{subset}.csv
+- `audio_files/{folder}/{performance_audio}`
+- `{folder}/{performance_MIDI}`
+- `{folder}/{MIDI_score}`
+- `{folder}/{performance_beat_annotation}`
+- `{folder}/{score_beat_annotation}`
+
+## Reminders
+
+This dataset is created for Audio-to-Score Transcription, however, the voice information in the MIDI socres is not checked and it's suggested not to use it as ground truth annotation.
