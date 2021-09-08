@@ -47,15 +47,18 @@ def MIDI_score_annotation_matched(metadata):
 
 def two_hand_parts(metadata):
     print('\nTwo hand parts?')
+    count_not_two_hand = 0
     for i, row in metadata.iterrows():
-        print(i+1, '/', len(metadata), end='\r')
+        print(i+1, '/', len(metadata), 'Not two-hand count:', count_not_two_hand, end='\r')
         MIDI_score_file = os.path.join(row['folder'], row['MIDI_score'])
         midi_data = pm.PrettyMIDI(MIDI_score_file)
 
         if len(midi_data.instruments) != 2:
             print('\nNope.', row['performance_id'], 'source:', row['source'], 'hand parts:', len(midi_data.instruments))
-            return
-    print('Yes!')
+            count_not_two_hand += 1
+
+    if count_not_two_hand == 0:
+        print('\nYes!')
 
 
 if __name__ == '__main__':
