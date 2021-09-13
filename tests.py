@@ -145,6 +145,31 @@ def validate_resolution(metadata, resolution=12):
     print('\nPrecision\tRecall\tF-measure\tAccuracy')
     print('{:.2f}\t\t{:.2f}\t{:.2f}\t\t{:.2f}'.format(np.mean(evals[0]), np.mean(evals[1]), np.mean(evals[2]), np.mean(evals[3])))
 
+def check_beat_annotation_sorted(metadata):
+    print('\nCheck is beat annotation sorted?')
+
+    all_sorted = True
+    for i, row in metadata.iterrows():
+        print(i+1, '/', len(metadata), end='\r')
+
+        beat_annotation_perfm = pd.read_csv(os.path.join(row['folder'], row['performance_beat_annotation']), header=None, sep='\t')
+        beat_annotation_score = pd.read_csv(os.path.join(row['folder'], row['score_beat_annotation']), header=None, sep='\t')
+
+        beats_perfm = np.array(beat_annotation_perfm[0])
+        beats_score = np.array(beat_annotation_score[0])
+
+        if min(beats_perfm[1:] - beats_perfm[:-1]) < 0:
+            print('\n performance beats not sorted! performance_id: {}, aligned: {}'.format(row['performance_id'], row['aligned']))
+            all_sorted = False
+        if min(beats_score[1:] - beats_score[:-1]) < 0:
+            print('\n score beats not sorted! performance_id: {}, aligned: {}'.format(row['performance_id'], row['aligned']))
+            all_sorted = False
+
+    if all_sorted:
+        print('\nYes!')
+    else:
+        print('\nNope!')
+
 if __name__ == '__main__':
 
     metadata_R = pd.read_csv('metadata_R.csv')
@@ -155,7 +180,8 @@ if __name__ == '__main__':
     # MIDI_score_annotation_matched(metadata)
     # two_hand_parts(metadata)
     # check_polyphony(metadata)
-    validate_resolution(metadata, resolution=24)
+    # validate_resolution(metadata, resolution=24)
+    check_beat_annotation_sorted(metadata)
 
 ### Output:
 
@@ -347,3 +373,7 @@ if __name__ == '__main__':
 # 2189 / 2189
 # Precision       Recall  F-measure       Accuracy
 # 1.00            0.94    0.96            0.93
+
+# Check is beat annotation sorted?
+# 2189 / 2189
+# Yes!
