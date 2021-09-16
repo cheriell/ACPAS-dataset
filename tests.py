@@ -105,24 +105,6 @@ def check_polyphony(metadata):
 def validate_resolution(metadata, resolution=12):
     print('\nValidate resolution {}.'.format(resolution))
 
-    def quantize_tick(tick, resolution_large, resolution_small):
-        return round(tick // (resolution_large / resolution_small) * (resolution_large / resolution_small))
-
-    def f_measure_pianoroll(output, target):
-        output = output.astype(bool)
-        target = target.astype(bool)
-
-        TP = np.logical_and(output == True, target == True).sum()
-        FP = np.logical_and(output == True, target == False).sum()
-        FN = np.logical_and(output == False, target == True).sum()
-
-        p = TP / (TP + FP + np.finfo(float).eps)
-        r = TP / (TP + FN + np.finfo(float).eps)
-        f = 2 * p * r / (p + r + np.finfo(float).eps)
-        acc = TP / (TP + FP + FN + np.finfo(float).eps)
-        
-        return p, r, f, acc
-
     evals = []
     for ri, row in metadata.iterrows():
         print(ri+1, '/', len(metadata), end='\r')
@@ -178,6 +160,79 @@ def check_beat_annotation_sorted(metadata):
     else:
         print('\nNope!')
 
+def validate_upper_performance(metadata, resolution=24, poly_level=8):
+    print('\nValidate performance upper limit with resolution 24, maximum polyphony 8.')
+
+    evals = []
+    for ri, row in metadata.iterrows():
+        print(ri+1, '/', len(metadata), end='\r')
+        midi_data = pm.PrettyMIDI(os.path.join(row['folder'], row['MIDI_score']))
+        pianoroll_orig = midi_data.get_piano_roll(pedal_threshold=128) > 0  # original pianoroll without pedal
+
+        # quantize tick by resolution
+        for inst in midi_data.instruments:
+            short_notes_indexes = []
+            for i, note in enumerate(inst.notes):
+                
+                note.start = midi_data.tick_to_time(quantize_tick(midi_data.time_to_tick(note.start), midi_data.resolution, resolution))
+                note.end = midi_data.tick_to_time(quantize_tick(midi_data.time_to_tick(note.end), midi_data.resolution, resolution))
+                if note.start >= note.end:
+                    short_notes_indexes.append(i)
+            
+            for i in short_notes_indexes[::-1]:
+                del inst.notes[i]
+
+        # remove polyphony > 8
+        all_notes = []
+        for ii, inst in enumerate(midi_data.instruments):
+            for ni, note in enumerate(inst.notes):
+                all_notes.append((ii, ni, note))
+        all_notes.sort(key=lambda x: x[2].start * 100000 + x[2].pitch / 100)
+        notes_cur = []
+        inotes_del = []
+        for ii, ni, note in all_notes:
+            for n in notes_cur:
+                if n.end <= note.start:
+                    notes_cur.remove(n)
+            if len(notes_cur) == poly_level:
+                inotes_del.append((ii, ni))
+            else:
+                notes_cur.append(note)
+        inotes_del.sort(key=lambda x: x[1], reverse=True)
+        for ii, ni in inotes_del:
+            del midi_data.instruments[ii].notes[ni]
+        
+        # updated pianoroll
+        pianoroll_tran = midi_data.get_piano_roll(pedal_threshold=128) > 0  # updated pianoroll without pedal
+
+        length = max(pianoroll_orig.shape[1], pianoroll_tran.shape[1])
+        pianoroll_orig = np.concatenate([pianoroll_orig, np.zeros((128, length-pianoroll_orig.shape[1]), dtype=bool)], axis=1)
+        pianoroll_tran = np.concatenate([pianoroll_tran, np.zeros((128, length-pianoroll_tran.shape[1]), dtype=bool)], axis=1)
+        p, r, f, acc = f_measure_pianoroll(pianoroll_tran, pianoroll_orig)
+        evals.append((p, r, f, acc))
+
+    evals = list(zip(*evals))
+    print('\nPrecision\tRecall\tF-measure\tAccuracy')
+    print('{:.2f}\t\t{:.2f}\t{:.2f}\t\t{:.2f}'.format(np.mean(evals[0]), np.mean(evals[1]), np.mean(evals[2]), np.mean(evals[3])))
+
+def quantize_tick(tick, resolution_large, resolution_small):
+    return round(tick // (resolution_large / resolution_small) * (resolution_large / resolution_small))
+
+def f_measure_pianoroll(output, target):
+    output = output.astype(bool)
+    target = target.astype(bool)
+
+    TP = np.logical_and(output == True, target == True).sum()
+    FP = np.logical_and(output == True, target == False).sum()
+    FN = np.logical_and(output == False, target == True).sum()
+
+    p = TP / (TP + FP + np.finfo(float).eps)
+    r = TP / (TP + FN + np.finfo(float).eps)
+    f = 2 * p * r / (p + r + np.finfo(float).eps)
+    acc = TP / (TP + FP + FN + np.finfo(float).eps)
+    
+    return p, r, f, acc
+
 if __name__ == '__main__':
 
     metadata_R = pd.read_csv('metadata_R.csv')
@@ -187,9 +242,10 @@ if __name__ == '__main__':
     # all_files_exist(metadata)
     # MIDI_score_downbeat_annotation_matched(metadata)
     # two_hand_parts(metadata)
-    check_polyphony(metadata)
+    # check_polyphony(metadata)
     # validate_resolution(metadata, resolution=24)
     # check_beat_annotation_sorted(metadata)
+    validate_upper_performance(metadata)
 
 ### Output:
 
@@ -588,3 +644,8 @@ if __name__ == '__main__':
 # Check is beat annotation sorted?
 # 2189 / 2189
 # Yes!
+
+# Validate performance upper limit with resolution 24, maximum polyphony 8.
+# 2189 / 2189
+# Precision       Recall  F-measure       Accuracy
+# 1.00            0.93    0.96            0.93
