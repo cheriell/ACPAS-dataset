@@ -55,6 +55,30 @@ def MIDI_score_downbeat_annotation_matched(metadata):
     else:
         print('\nNope!')
 
+def MIDI_score_beat_annotations_validation(metadata):
+    print('\nCheck if MIDI score beat annotations are valid (falls exactly at beats/subbeats)')
+    valid_beats = np.array([0., 0.125, 0.25, 0.33333333333, 0.375, 0.5, 0.625, 0.66666666667, 0.75, 0.875, 1.])
+
+    count_invalid = 0
+    count_all = 0
+    invalid_performance_ids = set()
+    for i, row in metadata.iterrows():
+        print(i+1, '/', len(metadata), end='\r')
+        if row['source'] == 'ASAP':
+            # annotation
+            score_annotation = pd.read_csv(os.path.join(row['folder'], row['score_beat_annotation']), header=None, delimiter='\t')
+            
+            midi_data = pm.PrettyMIDI(os.path.join(row['folder'], row['MIDI_score']))
+            beats_in_score = [midi_data.time_to_tick(beat) / midi_data.resolution for beat in score_annotation[0]]
+            for beat_in_score in beats_in_score:
+                if np.min(np.abs(valid_beats - (beat_in_score % 1))) > 0.02:
+                    invalid_performance_ids.add(row['performance_id'])
+                    count_invalid += 1
+            count_all += len(beats_in_score)
+            print(i+1, '/', len(metadata), 'Invalid annot percentage:', count_invalid / count_all, end='\r')
+    print('\nInvalid performance_ids:')
+    print(invalid_performance_ids)
+
 def two_hand_parts(metadata):
     print('\nTwo hand parts?')
     count_not_two_hand = 0
@@ -241,11 +265,12 @@ if __name__ == '__main__':
 
     # all_files_exist(metadata)
     # MIDI_score_downbeat_annotation_matched(metadata)
+    MIDI_score_beat_annotations_validation(metadata)
     # two_hand_parts(metadata)
     # check_polyphony(metadata)
     # validate_resolution(metadata, resolution=24)
     # check_beat_annotation_sorted(metadata)
-    validate_upper_performance(metadata)
+    # validate_upper_performance(metadata)
 
 ### Output:
 
@@ -451,6 +476,12 @@ if __name__ == '__main__':
     # Nope. performance_id: S_1156 source: ASAP distance: 0.0270833333333087
     # 2189 / 2189
 # Nope!
+
+# Check if MIDI score beat annotations are valid (falls exactly at beats/subbeats)
+# 2189 / 2189 Invalid annot percentage: 0.0785029398044441267
+    # Invalid performance_ids:
+    # {'S_936', 'S_1044', 'S_1062', 'S_1088', 'S_635', 'R_339', 'R_505', 'R_321', 'S_622', 'S_610', 'S_1098', 'R_358', 'R_312', 'S_1046', 'S_605', 'S_1037', 'R_487', 'S_1000', 'R_489', 'S_458', 'S_1161', 'R_502', 'R_342', 'R_451', 'S_976', 'R_375', 'R_341', 'R_357', 'S_990', 'R_457', 'R_315', 'R_291', 'S_1207', 'S_672', 'R_460', 'R_338', 'S_1058', 'S_1033', 'S_700', 'R_374', 'S_1209', 'S_509', 'R_447', 'S_994', 'S_619', 'S_1031', 'S_513', 'S_1065', 'R_271', 'S_1102', 'S_751', 'S_615', 'S_982', 'S_1170', 'R_458', 'R_479', 'R_496', 'S_979', 'R_414', 'S_1084', 'R_488', 'S_859', 'S_1063', 'R_474', 'S_1206', 'R_413', 'R_243', 'S_633', 'R_310', 'S_1018', 'R_335', 'R_311', 'S_1165', 'S_1089', 'R_377', 'S_1095', 'R_411', 'S_1090', 'S_1117', 'S_1168', 'S_1150', 'R_466', 'S_849', 'S_967', 'S_966', 'S_888', 'S_1039', 'S_1171', 'S_1094', 'S_1157', 'S_703', 'S_515', 'S_1211', 'S_1210', 'S_1051', 'S_1038', 'S_1049', 'S_860', 'S_1208', 'S_985', 'S_1078', 'S_848', 'R_459', 'S_977', 'S_1156', 'S_1169', 'S_1055', 'S_674', 'S_1029', 'S_1074', 'S_1056', 'S_1045', 'R_495', 'S_854', 'S_986', 'R_446', 'S_556', 'S_981', 'R_421', 'S_933', 'S_611', 'S_699', 'S_514', 'S_752', 'S_623', 'S_1118', 'R_422', 'S_983', 'S_968', 'R_467', 'S_1052', 'R_497', 'S_850', 'S_617', 'S_1166', 'R_359', 'S_1034', 'R_274', 'S_1036', 'S_614', 'S_634', 'R_415', 'R_408', 'R_478', 'S_457', 'S_856', 'S_1152', 'S_1020', 'S_456', 'S_1079', 'S_980', 'R_376', 'S_858', 'S_1099', 'S_1086', 'S_742', 'S_511', 'R_356', 'R_504', 'R_498', 'S_1083', 'S_1022', 'S_1158', 'S_1042', 'S_1116', 'R_416', 'S_664', 'S_863', 'R_273', 'S_1027', 'S_1003', 'S_616', 'R_313', 'R_473', 'S_750', 'S_931', 'S_746', 'R_336', 'S_749', 'S_950', 'S_867', 'S_748', 'S_1205', 'R_244', 'S_606', 'S_665', 'S_932', 'S_1032', 'S_702', 'R_409', 'S_1059', 'S_668', 'S_951', 'S_557', 'R_355', 'R_272', 'S_1162', 'S_999', 'S_743', 'S_705', 'S_1155', 'S_1081', 'S_1030', 'R_316', 'S_1101', 'R_549', 'S_987', 'S_970', 'S_740', 'S_1028', 'S_701', 'R_500', 'S_1016', 'S_675', 'R_378', 'S_1050', 'S_995', 'S_1001', 'R_499', 'S_1076', 'S_855', 'S_671', 'S_667', 'S_676', 'S_741', 'R_445', 'S_852', 'S_952', 'S_991', 'R_483', 'S_869', 'S_1163', 'S_432', 'S_607', 'S_861', 'S_666', 'S_1146', 'S_988', 'R_486', 'R_550', 'S_661', 'S_1097', 'S_1021', 'S_1080', 'R_452', 'S_604', 'S_847', 'S_1154', 'S_934', 'S_612', 'S_620', 'S_868', 'S_618', 'S_1048', 'S_431', 'S_889', 'R_480', 'S_1035', 'S_698', 'S_1153', 'R_552', 'S_1019', 'R_481', 'S_851', 'S_938', 'S_663', 'S_846', 'S_857', 'S_864', 'R_485', 'R_551', 'S_1204', 'S_747', 'S_930', 'S_1159', 'S_1025', 'S_1147', 'S_862', 'S_937', 'S_853', 'S_1054', 'S_1082', 'R_407', 'S_660', 'S_662', 'S_1026', 'R_314', 'R_484', 'S_455', 'R_233', 'S_1167', 'S_608', 'S_1151', 'S_402', 'S_975', 'S_1057', 'S_1091', 'S_1002', 'R_410', 'R_309', 'S_1061', 'R_477', 'R_461', 'S_1040', 'S_1024', 'S_992', 'S_865', 'S_1023', 'R_475', 'S_517', 'S_744', 'S_670', 'S_993', 'S_1096', 'S_1160', 'S_1103', 'R_548', 'R_308', 'S_1047', 'R_476', 'S_745', 'S_609', 'S_659', 'S_673', 'S_1064', 'S_1053', 'S_1124', 'S_1093', 'S_1115', 'R_340', 'S_512', 'S_669', 'R_462', 'S_704', 'S_866', 'R_337', 'S_510', 'S_978', 'R_482', 'R_468', 'S_969', 'R_463', 'S_1015', 'S_697', 'S_989', 'S_935', 'S_1060', 'R_512', 'S_1041', 'S_1087', 'S_613', 'S_1125', 'S_621', 'S_1073', 'S_1100', 'S_1077', 'S_1164', 'S_984', 'S_1085', 'S_516', 'R_322', 'S_1075', 'R_503', 'S_1017', 'S_1004', 'R_412', 'S_1043'}
+# by checking the so called "invalid" pieces, we can conclude that the beat annotations are actually valid - extracted beats from the MIDI scores, however, are invalid.
 
 # Two hand parts?
     # 22 / 2189 Not two-hand: 0
