@@ -3,12 +3,16 @@ import sys
 import argparse
 import math
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 import random
 random.seed(42)
 import subprocess
 import time
 import pretty_midi as pm
+import mido
 from collections import defaultdict
+import functools
 
 from utilities import format_path, load_path, mkdir
 
@@ -487,8 +491,7 @@ def create_synthetic_subset(distinct_pieces_dict,
     return distinct_pieces_dict, metadata_S
 
 def copy_midi_files(metadata, subset, args):
-    print('\nCopy midi files from external sources...')
-    print(subset)
+    print('\nCopy midi files from external sources...', subset)
 
     for i, row in metadata.iterrows():
         print(i+1, '/', len(metadata), end='\r')
@@ -509,8 +512,7 @@ def copy_midi_files(metadata, subset, args):
     print()
 
 def update_performance_durations(metadata, subset):
-    print('\nUpdate performance durations...')
-    print(subset)
+    print('\nUpdate performance durations...', subset)
 
     for i, row in metadata.iterrows():
         print(i+1, '/', len(metadata), end='\r')
@@ -525,8 +527,7 @@ def update_performance_durations(metadata, subset):
     return metadata
 
 def get_beat_annotations(metadata, subset, args):
-    print('\nGet beat annotations...')
-    print(subset)
+    print('\nGet beat annotations...', subset)
 
     for i, row in metadata.iterrows():
         print(i+1, '/', len(metadata), end='\r')
@@ -573,8 +574,7 @@ def get_beat_annotations(metadata, subset, args):
     print()
 
 def copy_audio_files(metadata, subset, args):
-    print('\nCopy audio files from external sources...')
-    print(subset)
+    print('\nCopy audio files from external sources...', subset)
 
     for i, row in metadata.iterrows():
         print(i+1, '/', len(metadata), end='\r')
@@ -590,6 +590,143 @@ def copy_audio_files(metadata, subset, args):
                 time.sleep(0.02)
     print()
 
+def update_ASAP_score_annotations(metadata, subset):
+    print('\nUpdate ASAP score annotations...', subset)
+
+    updated = set()
+
+    for i, row in metadata.iterrows():
+        print(i+1, '/', len(metadata), end='\r')
+
+        if row['source'] == 'ASAP':
+            if row['MIDI_score_external'] not in updated:
+                # keep track of updated ones
+                updated.add(row['MIDI_score_external'])
+
+                # udpate annotations in MIDI_score
+                MIDI_score_file = os.path.join(row['folder'], row['MIDI_score'])
+                score_beat_annotation_file = os.path.join(row['folder'], row['score_beat_annotation'])
+
+                midi_data = pm.PrettyMIDI(MIDI_score_file)
+                score_beat_annotations = pd.read_csv(score_beat_annotation_file, header=None, sep='\t')
+
+                # get ticks for beats in original MIDI_score
+                beat_ticks = [midi_data.time_to_tick(beat) for beat in score_beat_annotations[0]]
+                # add 0. for start, although tick 0 may not be a beat
+                if beat_ticks[0] != 0.:
+                    beat_ticks = [0] + beat_ticks
+                # fill up missing beats in the beginning
+                if beat_ticks[1] / (beat_ticks[2] - beat_ticks[1]) > 1.5:
+                    ticks_insert = []
+                    gap = beat_ticks[2] - beat_ticks[1]
+                    tick_insert = beat_ticks[1] - gap
+                    while tick_insert > gap * 0.2:
+                        ticks_insert = [tick_insert] + ticks_insert
+                        tick_insert -= gap
+                    beat_ticks = [beat_ticks[0]] + ticks_insert + beat_ticks[1:]
+                # add missing beats in the end
+                max_tick = midi_data.time_to_tick(midi_data.get_end_time())
+                gap = beat_ticks[-1] - beat_ticks[-2]
+                while beat_ticks[-1] < max_tick:
+                    beat_ticks.append(beat_ticks[-1] + gap)
+
+                # get tick to new tick mapping
+                tick2new = np.zeros(beat_ticks[-1]+1)  # float for now, round to int later
+                tick2new[:beat_ticks[1]+1] = np.linspace(start=0, 
+                                                        stop=midi_data.resolution * beat_ticks[1] / (beat_ticks[2] - beat_ticks[1]), 
+                                                        num=beat_ticks[1]+1)
+                for beat_index in range(1, len(beat_ticks)-1):
+                    tick2new[beat_ticks[beat_index]:beat_ticks[beat_index+1]+1] = np.linspace(start=tick2new[beat_ticks[beat_index]], 
+                                                        stop=tick2new[beat_ticks[beat_index]]+midi_data.resolution, 
+                                                        num=beat_ticks[beat_index+1]-beat_ticks[beat_index]+1)
+                
+                # write midi events to MIDI object
+                write_midi_with_tickmap(midi_data, tick2new)
+
+def write_midi_with_tickmap(midi_data, tick2new, filename='test.mid'):
+
+    def event_compare(event1, event2):
+        secondary_sort = {
+            'set_tempo': lambda e: (1 * 256 * 256),
+            'time_signature': lambda e: (2 * 256 * 256),
+            'key_signature': lambda e: (3 * 256 * 256),
+            'lyrics': lambda e: (4 * 256 * 256),
+            'text_events' :lambda e: (5 * 256 * 256),
+            'program_change': lambda e: (6 * 256 * 256),
+            'pitchwheel': lambda e: ((7 * 256 * 256) + e.pitch),
+            'control_change': lambda e: (
+                (8 * 256 * 256) + (e.control * 256) + e.value),
+            'note_off': lambda e: ((9 * 256 * 256) + (e.note * 256)),
+            'note_on': lambda e: (
+                (10 * 256 * 256) + (e.note * 256) + e.velocity) if e.velocity > 0 
+                else ((9 * 256 * 256) + (e.note * 256)),
+            'end_of_track': lambda e: (11 * 256 * 256)
+        }
+        if event1.time == event2.time and event1.type in secondary_sort and event2.type in secondary_sort:
+            return secondary_sort[event1.type](event1) - secondary_sort[event2.type](event2)
+        return event1.time - event2.time
+
+    mid = mido.MidiFile(ticks_per_beat=midi_data.resolution)
+    
+    # track 0 with timing information
+    timing_track = mido.MidiTrack()
+    # add time signatures & key signatures
+    # TODO
+    # add tempo changes
+    # TODO
+    # sort events
+    # TODO
+    # add end of track event
+    # TODO
+    # add track
+    mid.tracks.append(timing_track)
+
+    # add tracks
+    channels = list(range(16))
+    channels.remove(9)
+    for ii, instrument in enumerate(midi_data.instruments):
+        track = mido.MidiTrack()
+        channel = channels[ii % len(channels)]
+        # set the program number
+        track.append(mido.Message('program_change', 
+                                    time=0, 
+                                    program=instrument.program,
+                                    channel=channel))
+        # add note events
+        for note in instrument.notes:
+            track.append(mido.Message('note_on', 
+                                    time=int(tick2new(midi_data.time_to_tick(note.start))),
+                                    channel=channel,
+                                    note=note.pitch,
+                                    velocity=note.velocity))
+            track.append(mido.Message('note_on',
+                                    time=int(tick2new(midi_data.time_to_tick(note.end))),
+                                    channel=channel,
+                                    note=note.pitch,
+                                    velocity=0))
+        # add control change events
+        for cc in instrument.control_changes:
+            track.append(mido.Message('control_change',
+                                    time=int(tick2new(midi_data.time_to_tick(cc.time))),
+                                    channel=channel,
+                                    control=cc.number,
+                                    value=cc.value))
+        # sort all the events
+        track = sorted(track, key=functools.cmp_to_key(event_compare))
+        # add end of track event
+        track.append(mido.MetaMessage('end_of_track', time=track[-1].time+1))
+        # add track
+        mid.tracks.append(track)
+
+    # ticks from absolute to relative
+    for track in mid.tracks:
+        tick = 0
+        for event in track:
+            event.time -= tick
+            tick += event.time
+
+    mid.save(filename=filename)
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -599,53 +736,60 @@ if __name__ == '__main__':
                         help='Path to the MAPS dataset')
     parser.add_argument('--A_MAPS', 
                         type=str, 
-                        default='C:\\Users\\Marco\\Downloads\\Datasets\\A-MAPS\\midi',
-                        # default='/import/c4dm-datasets/A2S_transcription/A-MAPS_1.1/midi',
+                        # default='C:\\Users\\Marco\\Downloads\\Datasets\\A-MAPS\\midi',
+                        default='/import/c4dm-datasets/A2S_transcription/A-MAPS_1.1/midi',
                         help='Path to the A_MAPS midi files')
     parser.add_argument('--CPM',
                         type=str,
-                        default='C:\\Users\\Marco\\Downloads\\Datasets\\ClassicalPianoMIDI-dataset',
-                        # default='/import/c4dm-datasets/A2S_transcription/working/ClassicalPianoMIDI-dataset',
+                        # default='C:\\Users\\Marco\\Downloads\\Datasets\\ClassicalPianoMIDI-dataset',
+                        default='/import/c4dm-datasets/A2S_transcription/working/ClassicalPianoMIDI-dataset',
                         help='Path to the Classical Piano MIDI dataset')
     parser.add_argument('--ASAP',
                         type=str,
-                        default='C:\\Users\\Marco\\Downloads\\Datasets\\asap-dataset',
-                        # default='/import/c4dm-datasets/ASAP_dataset/asap-dataset-1.1',
+                        # default='C:\\Users\\Marco\\Downloads\\Datasets\\asap-dataset',
+                        default='/import/c4dm-datasets/ASAP_dataset/asap-dataset-1.1',
                         help='Path to the ASAP dataset')
     parser.add_argument('--MAESTRO',
                         type=str,
-                        default='C:\\Users\\Marco\\Downloads\\Datasets\\maestro-v2.0.0',
+                        # default='C:\\Users\\Marco\\Downloads\\Datasets\\maestro-v2.0.0',
+                        default='/import/c4dm-datasets/maestro-v2.0.0',
                         help='Path to the MAESTRO-v2.0.0 dataset')
     args = parser.parse_args()
 
-    CPM_metadata_dict = get_CPM_metadata_dict(args)
-    distinct_pieces_dict = get_distinct_pieces_dict(args)  # original distinct pieces are manually checked
+    # CPM_metadata_dict = get_CPM_metadata_dict(args)
+    # distinct_pieces_dict = get_distinct_pieces_dict(args)  # original distinct pieces are manually checked
 
-    distinct_pieces_dict, metadata_R =  create_real_recording_subset(distinct_pieces_dict, 
-                                                                    CPM_metadata_dict, 
-                                                                    args)
-    distinct_pieces_dict, metadata_S = create_synthetic_subset(distinct_pieces_dict, 
-                                                                CPM_metadata_dict, 
-                                                                args)
-    update_distinct_pieces(distinct_pieces_dict)
+    # distinct_pieces_dict, metadata_R =  create_real_recording_subset(distinct_pieces_dict, 
+    #                                                                 CPM_metadata_dict, 
+    #                                                                 args)
+    # distinct_pieces_dict, metadata_S = create_synthetic_subset(distinct_pieces_dict, 
+    #                                                             CPM_metadata_dict, 
+    #                                                             args)
+    # update_distinct_pieces(distinct_pieces_dict)
 
-    ## get performance MIDIs and MIDI scores
-    copy_midi_files(metadata_R, 'Real recording subset', args)
-    copy_midi_files(metadata_S, 'Synthetic subset', args)
+    # ## get performance MIDIs and MIDI scores
+    # copy_midi_files(metadata_R, 'Real recording subset', args)
+    # copy_midi_files(metadata_S, 'Synthetic subset', args)
 
-    ## get durations and update metadata
-    metadata_R = update_performance_durations(metadata_R, 'Real recoding subset')
-    metadata_S = update_performance_durations(metadata_S, 'Synthetic subset')
+    # ## get durations and update metadata
+    # metadata_R = update_performance_durations(metadata_R, 'Real recoding subset')
+    # metadata_S = update_performance_durations(metadata_S, 'Synthetic subset')
 
-    ## get beat annotations
-    get_beat_annotations(metadata_R, 'Real recording subset', args)
-    get_beat_annotations(metadata_S, 'Synthetic subset', args)
+    # ## get beat annotations
+    # get_beat_annotations(metadata_R, 'Real recording subset', args)
+    # get_beat_annotations(metadata_S, 'Synthetic subset', args)
 
-    ## get performance audios
+    # ## get performance audios
     # copy_audio_files(metadata_R, 'Real recording subset', args)
     # copy_audio_files(metadata_S, 'Synthetic subset', args)
-    # synthesize Kontakt audio files in reaper
+    # # TODO: synthesize Kontakt audio files in reaper
 
-    ## save metadata
-    metadata_R.to_csv('metadata_R.csv', index=False)
-    metadata_S.to_csv('metadata_S.csv', index=False)
+    # ## save metadata
+    # metadata_R.to_csv('metadata_R.csv', index=False)
+    # metadata_S.to_csv('metadata_S.csv', index=False)
+
+    ## update beat annotations in MIDI_score files
+    metadata_R = pd.read_csv('metadata_R.csv')
+    metadata_S = pd.read_csv('metadata_S.csv')
+    update_ASAP_score_annotations(metadata_R, 'Real recording subset')
+    update_ASAP_score_annotations(metadata_S, 'Synthetic subset')
