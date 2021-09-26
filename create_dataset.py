@@ -537,16 +537,18 @@ def get_beat_annotations(metadata, subset, args):
         performance_beat_annotation_internal = os.path.join(load_path(row['folder']), row['performance_beat_annotation'])
         score_beat_annotation_internal = os.path.join(load_path(row['folder']), row['score_beat_annotation'])
 
-        if not os.path.exists(performance_beat_annotation_internal) or not os.path.exists(score_beat_annotation_internal):
+        # if not os.path.exists(performance_beat_annotation_internal) or not os.path.exists(score_beat_annotation_internal):
+        if True:
 
             if row['source'] == 'ASAP':  # copy annotation files
                 performance_beat_annotation_external = load_path(row['performance_beat_annotation_external']).format(ASAP=args.ASAP)
                 score_beat_annotation_external = load_path(row['score_beat_annotation_external']).format(ASAP=args.ASAP)
 
-                subprocess.check_output(['cp', performance_beat_annotation_external, performance_beat_annotation_internal])
-                time.sleep(0.02)
-                subprocess.check_output(['cp', score_beat_annotation_external, score_beat_annotation_internal])
-                time.sleep(0.02)
+                performance_beat_annotation = pd.read_csv(performance_beat_annotation_external, sep='\t', header=None)[[1, 2]]
+                score_beat_annotation = pd.read_csv(score_beat_annotation_external, sep='\t', header=None)[[1, 2]]
+
+                performance_beat_annotation.to_csv(performance_beat_annotation_internal, sep='\t', header=None, index=False)
+                score_beat_annotation.to_csv(score_beat_annotation_internal, sep='\t', header=None, index=False)
 
             else:  # generate annotation files (performance MIDI and MIDI score are the same)
                 MIDI_file = os.path.join(load_path(row['folder']), row['performance_MIDI'])
@@ -570,7 +572,7 @@ def get_beat_annotations(metadata, subset, args):
                         label = beat_label
                     labels.append(label)
                 
-                annotation_df = pd.DataFrame({0: list(beats), 1: list(beats), 2: labels})
+                annotation_df = pd.DataFrame({1: list(beats), 2: labels})
                 annotation_df.to_csv(performance_beat_annotation_internal, sep='\t', header=None, index=False)
 
     print()
@@ -798,21 +800,21 @@ if __name__ == '__main__':
     # metadata_R = update_performance_durations(metadata_R, 'Real recoding subset')
     # metadata_S = update_performance_durations(metadata_S, 'Synthetic subset')
 
+    # ## save metadata
+    # metadata_R.to_csv('metadata_R.csv', index=False)
+    # metadata_S.to_csv('metadata_S.csv', index=False)
+
     # ## get beat annotations
-    # get_beat_annotations(metadata_R, 'Real recording subset', args)
-    # get_beat_annotations(metadata_S, 'Synthetic subset', args)
+    metadata_R = pd.read_csv('metadata_R.csv')
+    metadata_S = pd.read_csv('metadata_S.csv')
+    get_beat_annotations(metadata_R, 'Real recording subset', args)
+    get_beat_annotations(metadata_S, 'Synthetic subset', args)
 
     # ## get performance audios
     # copy_audio_files(metadata_R, 'Real recording subset', args)
     # copy_audio_files(metadata_S, 'Synthetic subset', args)
     # # TODO: synthesize Kontakt audio files in reaper
 
-    # ## save metadata
-    # metadata_R.to_csv('metadata_R.csv', index=False)
-    # metadata_S.to_csv('metadata_S.csv', index=False)
-
-    ## update beat annotations in MIDI_score files
-    metadata_R = pd.read_csv('metadata_R.csv')
-    metadata_S = pd.read_csv('metadata_S.csv')
-    update_ASAP_score_annotations(metadata_R, 'Real recording subset', args)
-    update_ASAP_score_annotations(metadata_S, 'Synthetic subset', args)
+    # ## update beat annotations in MIDI_score files
+    # update_ASAP_score_annotations(metadata_R, 'Real recording subset', args)
+    # update_ASAP_score_annotations(metadata_S, 'Synthetic subset', args)
