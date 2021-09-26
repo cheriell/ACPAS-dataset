@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings('ignore')
 import os
 import sys
 import argparse
@@ -590,8 +592,112 @@ def copy_audio_files(metadata, subset, args):
                 time.sleep(0.02)
     print()
 
-def update_ASAP_score_annotations(metadata, subset):
+def update_ASAP_score_annotations(metadata, subset, args):
     print('\nUpdate ASAP score annotations...', subset)
+
+    def write_midi_with_tickmap(midi_data, tick2new, score_beat_annotations, beat_ticks, filename='test.mid'):
+        
+        def event_compare(event1, event2):
+            secondary_sort = {
+                'set_tempo': lambda e: (1 * 256 * 256),
+                'time_signature': lambda e: (2 * 256 * 256),
+                'key_signature': lambda e: (3 * 256 * 256),
+                'lyrics': lambda e: (4 * 256 * 256),
+                'text_events' :lambda e: (5 * 256 * 256),
+                'program_change': lambda e: (6 * 256 * 256),
+                'pitchwheel': lambda e: ((7 * 256 * 256) + e.pitch),
+                'control_change': lambda e: (
+                    (8 * 256 * 256) + (e.control * 256) + e.value),
+                'note_off': lambda e: ((9 * 256 * 256) + (e.note * 256)),
+                'note_on': lambda e: (
+                    (10 * 256 * 256) + (e.note * 256) + e.velocity) if e.velocity > 0 
+                    else ((9 * 256 * 256) + (e.note * 256)),
+                'end_of_track': lambda e: (11 * 256 * 256)
+            }
+            if event1.time == event2.time and event1.type in secondary_sort and event2.type in secondary_sort:
+                return secondary_sort[event1.type](event1) - secondary_sort[event2.type](event2)
+            return event1.time - event2.time
+
+        mid = mido.MidiFile(ticks_per_beat=midi_data.resolution)
+        
+        # track 0 with timing information
+        timing_track = mido.MidiTrack()
+        # add time signatures & key signatures
+        time_signature_changes = [(row[0], row[2].split(',')[1]) for i, row in score_beat_annotations.iterrows() if len(row[2].split(',')) > 1 and row[2].split(',')[1] != '']
+        for ts in time_signature_changes:
+            timing_track.append(mido.MetaMessage('time_signature',
+                                                time=int(tick2new[midi_data.time_to_tick(ts[0])]),
+                                                numerator=int(ts[1].split('/')[0]),
+                                                denominator=int(ts[1].split('/')[1])))
+        key_num2name = ['C',
+            'G', 'D', 'A', 'E', 'B', 'F#', 'C#m', 'G#m', 'D#m', 'Bbm', 'Fm',
+            'Gm', 'Dm', 'Am', 'Em', 'Bm', 'F#m', 'Db', 'Ab', 'Eb', 'Bb', 'F',
+        ]
+        key_signature_changes = [(row[0], row[2].split(',')[2]) for i, row in score_beat_annotations.iterrows() if len(row[2].split(',')) == 3]
+        for ks in key_signature_changes:
+            timing_track.append(mido.MetaMessage('key_signature',
+                                                time=int(tick2new[midi_data.time_to_tick(ks[0])]),
+                                                key=key_num2name[int(ks[1])]))
+        # add tempo changes
+        for beat_index in range(len(beat_ticks)-1):
+            gap_in_second = midi_data.tick_to_time(beat_ticks[beat_index+1]) - midi_data.tick_to_time(beat_ticks[beat_index])
+            gap_in_ticknew = tick2new[beat_ticks[beat_index+1]] - tick2new[beat_ticks[beat_index]]
+            tempo = gap_in_second * 1e6 / (gap_in_ticknew / midi_data.resolution)
+            timing_track.append(mido.MetaMessage('set_tempo', 
+                                                time=int(tick2new[beat_ticks[beat_index]]),
+                                                tempo=int(tempo)))
+        # sort events
+        timing_track.sort(key=functools.cmp_to_key(event_compare))
+        # add end of track event
+        timing_track.append(mido.MetaMessage('end_of_track', time=timing_track[-1].time+1))
+        # add track
+        mid.tracks.append(timing_track)
+
+        # add tracks
+        channels = list(range(16))
+        channels.remove(9)
+        for ii, instrument in enumerate(midi_data.instruments):
+            track = mido.MidiTrack()
+            channel = channels[ii % len(channels)]
+            # set the program number
+            track.append(mido.Message('program_change', 
+                                        time=0, 
+                                        program=instrument.program,
+                                        channel=channel))
+            # add note events
+            for note in instrument.notes:
+                track.append(mido.Message('note_on', 
+                                        time=int(tick2new[midi_data.time_to_tick(note.start)]),
+                                        channel=channel,
+                                        note=note.pitch,
+                                        velocity=note.velocity))
+                track.append(mido.Message('note_on',
+                                        time=int(tick2new[midi_data.time_to_tick(note.end)]),
+                                        channel=channel,
+                                        note=note.pitch,
+                                        velocity=0))
+            # add control change events
+            for cc in instrument.control_changes:
+                track.append(mido.Message('control_change',
+                                        time=int(tick2new[midi_data.time_to_tick(cc.time)]),
+                                        channel=channel,
+                                        control=cc.number,
+                                        value=cc.value))
+            # sort all the events
+            track = sorted(track, key=functools.cmp_to_key(event_compare))
+            # add end of track event
+            track.append(mido.MetaMessage('end_of_track', time=track[-1].time+1))
+            # add track
+            mid.tracks.append(track)
+
+        # ticks from absolute to relative
+        for track in mid.tracks:
+            tick = 0
+            for event in track:
+                event.time -= tick
+                tick += event.time
+
+        mid.save(filename=filename)
 
     updated = set()
 
@@ -604,8 +710,8 @@ def update_ASAP_score_annotations(metadata, subset):
                 updated.add(row['MIDI_score_external'])
 
                 # udpate annotations in MIDI_score
-                MIDI_score_file = os.path.join(row['folder'], row['MIDI_score'])
-                score_beat_annotation_file = os.path.join(row['folder'], row['score_beat_annotation'])
+                MIDI_score_file = load_path(row['MIDI_score_external']).format(ASAP=args.ASAP)
+                score_beat_annotation_file = load_path(row['score_beat_annotation_external']).format(ASAP=args.ASAP)
 
                 midi_data = pm.PrettyMIDI(MIDI_score_file)
                 score_beat_annotations = pd.read_csv(score_beat_annotation_file, header=None, sep='\t')
@@ -641,91 +747,8 @@ def update_ASAP_score_annotations(metadata, subset):
                                                         num=beat_ticks[beat_index+1]-beat_ticks[beat_index]+1)
                 
                 # write midi events to MIDI object
-                write_midi_with_tickmap(midi_data, tick2new)
-
-def write_midi_with_tickmap(midi_data, tick2new, filename='test.mid'):
-
-    def event_compare(event1, event2):
-        secondary_sort = {
-            'set_tempo': lambda e: (1 * 256 * 256),
-            'time_signature': lambda e: (2 * 256 * 256),
-            'key_signature': lambda e: (3 * 256 * 256),
-            'lyrics': lambda e: (4 * 256 * 256),
-            'text_events' :lambda e: (5 * 256 * 256),
-            'program_change': lambda e: (6 * 256 * 256),
-            'pitchwheel': lambda e: ((7 * 256 * 256) + e.pitch),
-            'control_change': lambda e: (
-                (8 * 256 * 256) + (e.control * 256) + e.value),
-            'note_off': lambda e: ((9 * 256 * 256) + (e.note * 256)),
-            'note_on': lambda e: (
-                (10 * 256 * 256) + (e.note * 256) + e.velocity) if e.velocity > 0 
-                else ((9 * 256 * 256) + (e.note * 256)),
-            'end_of_track': lambda e: (11 * 256 * 256)
-        }
-        if event1.time == event2.time and event1.type in secondary_sort and event2.type in secondary_sort:
-            return secondary_sort[event1.type](event1) - secondary_sort[event2.type](event2)
-        return event1.time - event2.time
-
-    mid = mido.MidiFile(ticks_per_beat=midi_data.resolution)
-    
-    # track 0 with timing information
-    timing_track = mido.MidiTrack()
-    # add time signatures & key signatures
-    # TODO
-    # add tempo changes
-    # TODO
-    # sort events
-    # TODO
-    # add end of track event
-    # TODO
-    # add track
-    mid.tracks.append(timing_track)
-
-    # add tracks
-    channels = list(range(16))
-    channels.remove(9)
-    for ii, instrument in enumerate(midi_data.instruments):
-        track = mido.MidiTrack()
-        channel = channels[ii % len(channels)]
-        # set the program number
-        track.append(mido.Message('program_change', 
-                                    time=0, 
-                                    program=instrument.program,
-                                    channel=channel))
-        # add note events
-        for note in instrument.notes:
-            track.append(mido.Message('note_on', 
-                                    time=int(tick2new(midi_data.time_to_tick(note.start))),
-                                    channel=channel,
-                                    note=note.pitch,
-                                    velocity=note.velocity))
-            track.append(mido.Message('note_on',
-                                    time=int(tick2new(midi_data.time_to_tick(note.end))),
-                                    channel=channel,
-                                    note=note.pitch,
-                                    velocity=0))
-        # add control change events
-        for cc in instrument.control_changes:
-            track.append(mido.Message('control_change',
-                                    time=int(tick2new(midi_data.time_to_tick(cc.time))),
-                                    channel=channel,
-                                    control=cc.number,
-                                    value=cc.value))
-        # sort all the events
-        track = sorted(track, key=functools.cmp_to_key(event_compare))
-        # add end of track event
-        track.append(mido.MetaMessage('end_of_track', time=track[-1].time+1))
-        # add track
-        mid.tracks.append(track)
-
-    # ticks from absolute to relative
-    for track in mid.tracks:
-        tick = 0
-        for event in track:
-            event.time -= tick
-            tick += event.time
-
-    mid.save(filename=filename)
+                MIDI_score_file = os.path.join(load_path(row['folder']), row['MIDI_score'])
+                write_midi_with_tickmap(midi_data, tick2new, score_beat_annotations, beat_ticks, filename=MIDI_score_file)
 
 if __name__ == '__main__':
 
@@ -791,5 +814,5 @@ if __name__ == '__main__':
     ## update beat annotations in MIDI_score files
     metadata_R = pd.read_csv('metadata_R.csv')
     metadata_S = pd.read_csv('metadata_S.csv')
-    update_ASAP_score_annotations(metadata_R, 'Real recording subset')
-    update_ASAP_score_annotations(metadata_S, 'Synthetic subset')
+    update_ASAP_score_annotations(metadata_R, 'Real recording subset', args)
+    update_ASAP_score_annotations(metadata_S, 'Synthetic subset', args)
