@@ -537,8 +537,7 @@ def get_beat_annotations(metadata, subset, args):
         performance_beat_annotation_internal = os.path.join(load_path(row['folder']), row['performance_beat_annotation'])
         score_beat_annotation_internal = os.path.join(load_path(row['folder']), row['score_beat_annotation'])
 
-        # if not os.path.exists(performance_beat_annotation_internal) or not os.path.exists(score_beat_annotation_internal):
-        if True:
+        if not os.path.exists(performance_beat_annotation_internal) or not os.path.exists(score_beat_annotation_internal):
 
             if row['source'] == 'ASAP':  # copy annotation files
                 performance_beat_annotation_external = load_path(row['performance_beat_annotation_external']).format(ASAP=args.ASAP)
@@ -557,7 +556,21 @@ def get_beat_annotations(metadata, subset, args):
                 beats = midi_data.get_beats()
                 downbeats_set = set(midi_data.get_downbeats())
                 time2timesig_change = defaultdict(str, dict([(ts.time, f'{ts.numerator}/{ts.denominator}') for ts in midi_data.time_signature_changes]))
-                time2keysig_change = defaultdict(str, dict([(ks.time, str(ks.key_number)) for ks in midi_data.key_signature_changes]))
+                key_sharps2midoname = ['C',
+                    'G', 'D', 'A', 'E', 'B', 'F#', 'C#m', 'G#m', 'D#m', 'Bbm', 'Fm',
+                    'Gm', 'Dm', 'Am', 'Em', 'Bm', 'F#m', 'Db', 'Ab', 'Eb', 'Bb', 'F',
+                ]
+                key_num2midoname = [
+                    'C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B',
+                    'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am',
+                    'Bbm', 'Bm'
+                ]
+                def key_num2sharps(key_number):
+                    s = key_sharps2midoname.index(key_num2midoname[key_number])
+                    if s > 11:
+                        s -= len(key_sharps2midoname)
+                    return s
+                time2keysig_change = defaultdict(str, dict([(ks.time, str(key_num2sharps(ks.key_number))) for ks in midi_data.key_signature_changes]))
 
                 labels = []
                 for beat in beats:
@@ -631,7 +644,7 @@ def update_ASAP_score_annotations(metadata, subset, args):
                                                 time=int(tick2new[midi_data.time_to_tick(ts[0])]),
                                                 numerator=int(ts[1].split('/')[0]),
                                                 denominator=int(ts[1].split('/')[1])))
-        key_num2name = ['C',
+        key_sharps2name = ['C',
             'G', 'D', 'A', 'E', 'B', 'F#', 'C#m', 'G#m', 'D#m', 'Bbm', 'Fm',
             'Gm', 'Dm', 'Am', 'Em', 'Bm', 'F#m', 'Db', 'Ab', 'Eb', 'Bb', 'F',
         ]
@@ -639,7 +652,7 @@ def update_ASAP_score_annotations(metadata, subset, args):
         for ks in key_signature_changes:
             timing_track.append(mido.MetaMessage('key_signature',
                                                 time=int(tick2new[midi_data.time_to_tick(ks[0])]),
-                                                key=key_num2name[int(ks[1])]))
+                                                key=key_sharps2name[int(ks[1])]))
         # add tempo changes
         for beat_index in range(len(beat_ticks)-1):
             gap_in_second = midi_data.tick_to_time(beat_ticks[beat_index+1]) - midi_data.tick_to_time(beat_ticks[beat_index])
