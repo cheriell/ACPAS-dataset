@@ -775,7 +775,7 @@ if __name__ == '__main__':
     parser.add_argument('--A_MAPS', 
                         type=str, 
                         # default='C:\\Users\\Marco\\Downloads\\Datasets\\A-MAPS\\midi',
-                        default='/import/c4dm-datasets/A2S_transcription/A-MAPS_1.1/midi',
+                        default='/import/c4dm-datasets/A2S_transcription/working/A-MAPS_1.1/midi',
                         help='Path to the A_MAPS midi files')
     parser.add_argument('--CPM',
                         type=str,
@@ -818,16 +818,18 @@ if __name__ == '__main__':
     # metadata_S.to_csv('metadata_S.csv', index=False)
 
     # ## get beat annotations
-    metadata_R = pd.read_csv('metadata_R.csv')
-    metadata_S = pd.read_csv('metadata_S.csv')
-    get_beat_annotations(metadata_R, 'Real recording subset', args)
-    get_beat_annotations(metadata_S, 'Synthetic subset', args)
+    # get_beat_annotations(metadata_R, 'Real recording subset', args)
+    # get_beat_annotations(metadata_S, 'Synthetic subset', args)
 
     # ## get performance audios
-    # copy_audio_files(metadata_R, 'Real recording subset', args)
-    # copy_audio_files(metadata_S, 'Synthetic subset', args)
+    metadata_R = pd.read_csv('metadata_R.csv')
+    metadata_S = pd.read_csv('metadata_S.csv')
+    copy_audio_files(metadata_R, 'Real recording subset', args)
+    copy_audio_files(metadata_S, 'Synthetic subset', args)
     # # TODO: synthesize Kontakt audio files in reaper
 
     # ## update beat annotations in MIDI_score files
     # update_ASAP_score_annotations(metadata_R, 'Real recording subset', args)
     # update_ASAP_score_annotations(metadata_S, 'Synthetic subset', args)
+
+

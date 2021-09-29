@@ -1,5 +1,8 @@
-
+import os
 import pandas as pd
+import pretty_midi as pm
+import librosa
+import json
 
 
 def print_statistics():
@@ -55,6 +58,50 @@ def print_statistics():
     
     print(statistics)
 
+def statistics_other_datasets():
+    MAPS = '/import/c4dm-01/MAPS_original'
+    A_MAPS = '/import/c4dm-datasets/A2S_transcription/working/A-MAPS_1.1/midi/'
+    ASAP = '/import/c4dm-datasets/ASAP_dataset/asap-dataset-1.1'
+
+    print('MAPS dataset:')
+    n, duration = 0, 0
+    MAPS_subsets = [f for f in os.listdir(MAPS) if os.path.isdir(os.path.join(MAPS, f))]
+    for subset in MAPS_subsets:
+        for item in os.listdir(os.path.join(MAPS, subset, 'MUS')):
+            if item[-4:] == '.wav':
+                y, fs = librosa.load(os.path.join(MAPS, subset, 'MUS', item))
+                n += 1
+                duration += len(y) / fs
+                print(n, end='\r')
+    print('\n, n:', n, 'duration:', duration / 3600)
+
+    print('A-MAPS dataset:')
+    n, duration = 0, 0
+    for item in os.listdir(A_MAPS):
+        midi_data = pm.PrettyMIDI(os.path.join(A_MAPS, item))
+        n += 1
+        duration += midi_data.get_end_time()
+        print(n, end='\r')
+    print('\n n:', n, 'duration:', duration / 3600)
+
+    print('ASAP dataset:')
+    n, duration = 0, 0
+    n_audio, duration_audio = 0, 0
+    metadata = pd.read_csv(os.path.join(ASAP, 'metadata.csv'))
+    for i, row in metadata.iterrows():
+        midi_data = pm.PrettyMIDI(os.path.join(ASAP, row['midi_performance']))
+        d = midi_data.get_end_time()
+        n += 1
+        duration += d
+        if type(row['maestro_audio_performance']) == str:
+            n_audio += 1
+            duration_audio += d
+        print(i+1, '/', len(metadata), end='\r')
+    print('\n n:', n, 'duration:', duration / 3600)
+    print('n_audio:', n_audio, 'duration_audio:', duration_audio / 3600)
+
+
 if __name__ == '__main__':
 
-    print_statistics()
+    # print_statistics()
+    statistics_other_datasets()
