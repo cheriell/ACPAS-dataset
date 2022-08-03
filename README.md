@@ -70,32 +70,53 @@ The parameters in the two `metadata_X.csv` file are:
 - `composer`: composer of the music piece.
 - `piece_id`: ID of the corresponding music piece, this is in line with the piece ID provided in `distinct_pieces.csv`.
 - `title`: title of the music pieces, in line with the title in `distinct_pieces.csv`.
-- `source`: the source dataset of the performance, can be "MAPS", "ASAP" or "CPM".
+- `source`: the source dataset of the performance; can be "MAPS", "ASAP" or "CPM".
 - `performance_audio_external`: path to the performance audio in the source dataset.
 - `performance_MIDI_external`: path to the performance MIDI in the source dataset.
 - `MIDI_score_external`: path to the MIDI score in the source dataset.
-- `performance_beat_annotation_external`: path to the performance beat annotation in the source dataset.
-- `score_beat_annotation_external`: path to the score beat annotation in the source dataset.
+- `performance_annotation_external`: path to the performance annotation in the source dataset.
+- `score_annotation_external`: path to the score annotation in the source dataset.
 - `folder`: folder to the audio, MIDI and annotation files.
 - `performance_audio`: performance audio file.
 - `performance_MIDI`: performance MIDI file.
 - `MIDI_score`: MIDI score file.
 - `aligned`: True if the performance and score are aligned.
-- `performance_beat_annotation`:  performance beat annotation file.
-- `score_beat_annotation`:  # score beat annotation file.
+- `performance_annotation`:  performance annotation file.
+- `score_annotation`:  score annotation file.
 - `duration`: duration of the performance in seconds.
 - `split`: train/validation/test split.
+- `alignment_annotation`: performance-to-score alignment annotation file.
+- `aligned_notes_ratio_perfm`: number of aligned notes / performance notes.
+- `aligned_notes_ratio_score`: number of aligned notes / notes in score MIDI.
 
 The corresponding files are provided in the following locations:
 
 - `audio_files/{folder}/{performance_audio}`
 - `{folder}/{performance_MIDI}`
 - `{folder}/{MIDI_score}`
-- `{folder}/{performance_beat_annotation}`
-- `{folder}/{score_beat_annotation}`
+- `{folder}/{performance_annotation}`
+- `{folder}/{score_annotation}`
+- `{folder}/{alignment_annotation}`
 
 ## Reminders
 
 - This dataset is created for Audio-to-Score Transcription, however, the voice information in the MIDI socres is not checked and it's suggested not to use it as ground truth annotation.
-- there are 83 performances in total whose hand part is not equal to 2 (range from 1 to 10 parts).
+- 83 performances have less/more than two hand parts (range from 1 to 10 parts).
 - 30 performances are not aligned with the corresponding score. This is because of some errors made during the performance.
+
+---
+
+## Release notes
+
+### v1.1
+
+- To upgrade from v1.0 to v1.1, run `python add_alignment.py`, which will create the alignment annotations and update the metadata.
+- We provide note-wise alignment annotations for the ASAP data, which is originally beat-wise aligned only.
+- The alignment is implemented using the [Symbolic Music Alignment Tool](https://midialignment.github.io/demo.html). For better accuracies, we first use the provided aligned beat annotations to divide the performances and scores into short segments and then run the alignment algorithm for each segment. 
+- Three columns are added to the metadata files, `alignment_annotation`, `aligned_notes_ratio_perfm`, and `aligned_notes_ratio_score`.
+
+### v1.0
+
+- See dataset details in our ISMIR demo paper:
+
+    Lele Liu, Veronica Morfi and Emmanouil Benetos, "[ACPAS: A Dataset of Aligned Classical Piano Audio and Scores for Audio-to-Score Transcription,](https://archives.ismir.net/ismir2021/latebreaking/000013.pdf)" International Society for Music Information Retrieval Conference Late-Breaking Demos Session, Nov 2021.

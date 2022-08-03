@@ -2,3 +2,5 @@ __pycache__/
 audio_files/
 audio_files_Kontakt/
 batches/
+temps/
+corresp.txt
