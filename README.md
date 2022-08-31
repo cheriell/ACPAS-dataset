@@ -114,6 +114,10 @@ The corresponding files are provided in the following locations:
 - We provide note-wise alignment annotations for the ASAP data, which is originally beat-wise aligned only.
 - The alignment is implemented using the [Symbolic Music Alignment Tool](https://midialignment.github.io/demo.html). For better accuracies, we first use the provided aligned beat annotations to divide the performances and scores into short segments and then run the alignment algorithm for each segment. 
 - Three columns are added to the metadata files, `alignment_annotation`, `aligned_notes_ratio_perfm`, and `aligned_notes_ratio_score`.
+- The `alignment_annotation` files are in .csv format and cover a list of note information including:
+    - note onset time in performance and score
+    - note pitch in performance and score
+    - note velocity in performance and score
 
 ### v1.0
 
