@@ -4,3 +4,5 @@ audio_files_Kontakt/
 batches/
 temps/
 corresp.txt
+*.wav
+.DS_Store
