@@ -9,7 +9,8 @@
 #       Performance Error Detection and Post-Processing for Fast and Accurate Symbolic Music Alignment
 #       In Proc. ISMIR, pp. 347-353, 2017.
 ###############################################################################
-
+import warnings
+warnings.filterwarnings('ignore')
 from ctypes import alignment
 import pandas as pd
 import pretty_midi as pm
@@ -18,7 +19,8 @@ import subprocess
 from pathlib import Path
 
 
-AlignmentTool = './../../tools/AlignmentTool/MIDIToMIDIAlign.sh'
+ASAP = "~/Desktop/datasets/asap-dataset-master"
+AlignmentTool = '../../tools/AlignmentTool/MIDIToMIDIAlign.sh'
 resolution = 480
 tolerance = 0.05
 
@@ -28,7 +30,7 @@ def segment_MIDI(row):
     annot_perfm_file = Path(row['folder'], row['performance_annotation'])
     annot_score_file = Path(row['folder'], row['score_annotation'])
     MIDI_perfm_file = Path(row['folder'], row['performance_MIDI'])
-    MIDI_score_file = Path(row['folder'], row['MIDI_score'])
+    MIDI_score_file = Path(row['MIDI_score_external'].format(ASAP=ASAP))  # use the original MIDI score provided by ASAP
 
     annot_perfm = pd.read_csv(str(annot_perfm_file), sep='\t', header=None)
     annot_score = pd.read_csv(str(annot_score_file), sep='\t', header=None)
@@ -168,7 +170,7 @@ def alignment_statistics(row):
 
     print('Get alignment statistics')
     MIDI_perfm_file = Path(row['folder'], row['performance_MIDI'])
-    MIDI_score_file = Path(row['folder'], row['MIDI_score'])
+    MIDI_score_file = Path(row['MIDI_score_external'].format(ASAP=ASAP))  # use ASAP MIDI score.
     alignment_annotation_file = Path(row['folder'], f'{row["performance_id"]}_{row["source"]}_align_annot.csv')
 
     MIDI_perfm = pm.PrettyMIDI(str(MIDI_perfm_file))
